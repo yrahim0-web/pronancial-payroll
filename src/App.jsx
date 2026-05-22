@@ -801,8 +801,23 @@ const [saving, setSaving] = useState(false);
 
 // ─── Paystub ─────────────────────────────────────────────────────────────────
 function PaystubsPage({ company }) {
-  const emps = EMPLOYEES_BY_COMPANY[company.id] || [];
-  const [selected, setSelected] = useState(emps[0]);
+  const [emps, setEmps] = useState([]);
+  const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    const fetchEmps = async () => {
+      const { data } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('company_id', company.id)
+        .eq('status', 'active');
+      if (data && data.length > 0) {
+        setEmps(data);
+        setSelected(data[0]);
+      }
+    };
+    fetchEmps();
+  }, [company.id]);
   const calc = selected ? calcPayroll(selected, 80, 0, 0) : null;
   const ytd = calc ? { gross: calc.gross*11, cpp: calc.cpp*11, ei: calc.ei*11, tax: calc.tax*11, net: calc.net*11 } : null;
 
