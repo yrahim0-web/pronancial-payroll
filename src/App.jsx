@@ -647,6 +647,7 @@ function RunPayrollPage({ company, setPage }) {
   const [hours, setHours] = useState(() => Object.fromEntries(emps.map(e => [e.id, { reg:"80", ot:"0", stat:"0", bonus:"0", vacRate:"4%" }])));
   const [processed, setProcessed] = useState(false);
 const [saving, setSaving] = useState(false);
+const [showPreview, setShowPreview] = useState(false);
   const [period] = useState("Jun 1–15, 2025");
 
   const rows = emps.map(e => {
@@ -760,7 +761,7 @@ const [saving, setSaving] = useState(false);
             <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 p-3 rounded-xl"><AlertCircle size={14}/> Review CPP exemptions</div>
           </div>
           <div className="mt-4 space-y-2">
-            <button className="w-full py-2 border border-blue-600 text-blue-600 rounded-xl text-sm hover:bg-blue-50 transition-colors">Preview Payroll</button>
+            <button onClick={() => setShowPreview(true)} className="w-full py-2 border border-blue-600 text-blue-600 rounded-xl text-sm hover:bg-blue-50 transition-colors">Preview Payroll</button>
             <button onClick={async () => {
   setSaving(true);
   const { data } = await supabase
@@ -798,6 +799,46 @@ const [saving, setSaving] = useState(false);
     </div>
   );
 }
+<Modal open={showPreview} onClose={() => setShowPreview(false)} title="Payroll Preview" wide>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+            <span className="text-sm text-gray-600">Pay Period</span>
+            <span className="text-sm font-semibold text-gray-900">{period}</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+            <span className="text-sm text-gray-600">Total Employees</span>
+            <span className="text-sm font-semibold text-gray-900">{rows.length}</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+            <span className="text-sm text-gray-600">Gross Payroll</span>
+            <span className="text-sm font-semibold text-gray-900">${totals.gross.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+            <span className="text-sm text-gray-600">Total CPP</span>
+            <span className="text-sm font-semibold text-red-500">${totals.cpp.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+            <span className="text-sm text-gray-600">Total EI</span>
+            <span className="text-sm font-semibold text-red-500">${totals.ei.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+            <span className="text-sm text-gray-600">Total Income Tax</span>
+            <span className="text-sm font-semibold text-red-500">${totals.tax.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-blue-50 rounded-xl">
+            <span className="text-sm font-semibold text-gray-800">Total Net Pay</span>
+            <span className="text-sm font-bold text-emerald-700">${totals.net.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-amber-50 rounded-xl">
+            <span className="text-sm text-gray-600">CRA Remittance Total</span>
+            <span className="text-sm font-semibold text-blue-700">${(totals.cpp*2 + totals.ei*2.4 + totals.tax).toFixed(2)}</span>
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <button onClick={() => setShowPreview(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50">Close</button>
+          <button onClick={() => setShowPreview(false)} className="px-5 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium">Looks Good</button>
+        </div>
+      </Modal>
 
 // ─── Paystub ─────────────────────────────────────────────────────────────────
 function PaystubsPage({ company }) {
