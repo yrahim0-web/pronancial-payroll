@@ -61,6 +61,430 @@ const DEDUCTION_DATA = [
 ];
 
 const VAC_RATES = { "4%": 0.04, "6%": 0.06, "8%": 0.08 };
+function calcPayroll(
+  emp,
+  regHrs,
+  otHrs,
+  bonus,
+  statHrs = 0,
+  vacRate = 0.04,
+  payFreq = "Semi-monthly",
+  td1Fed = 16129,
+  td1Prov = null
+) {
+  const PP = PAY_PERIODS[payFreq] || 24;
+
+  const reg = Number(regHrs || 0);
+  const ot = Number(otHrs || 0);
+  const bon = Number(bonus || 0);
+  const stat = Number(statHrs || 0);
+
+  // ─────────────────────────────────────────────
+  // GROSS EARNINGS
+  // ─────────────────────────────────────────────
+  let baseEarnings = 0;
+  let statPay = 0;
+
+  if (emp.type === "Hourly") {
+    const regPay = reg * emp.rate;
+    const otPay = ot * emp.rate * 1.5;
+    statPay = stat * emp.rate * 1.5;
+    baseEarnings = regPay + otPay + statPay + bon;
+  } else {
+    const salaryPerPeriod = emp.rate / PP;
+    const dailyRate = emp.rate / 261;
+    statPay = stat * (dailyRate / 8) * 1.5;
+    baseEarnings = salaryPerPeriod + statPay + bon;
+  }
+
+  const vacPay = baseEarnings * vacRate;
+  const gross = +(baseEarnings + vacPay).toFixed(2);
+
+  // ─────────────────────────────────────────────
+  // ANNUALIZATION (CRA CORE)
+  // ─────────────────────────────────────────────
+  const annualGross = gross * PP;
+
+  // ─────────────────────────────────────────────
+  // CPP
+  // ─────────────────────────────────────────────
+  const CPP_RATE = 0.0595;
+  const CPP_MAX = 3867.5;
+  const CPP_EXEMPT = 3500;
+
+  const pensionable = Math.max(annualGross - CPP_EXEMPT, 0);
+  const annualCPP = Math.min(pensionable * CPP_RATE, CPP_MAX);
+
+  const cpp = +(annualCPP / PP).toFixed(2);
+
+  // CPP2
+  const CPP2_RATE = 0.04;
+  const CPP2_MAX = 396;
+  const CPP2_THRESHOLD = 73200;
+
+  const annualCPP2 =
+    annualGross > CPP2_THRESHOLD
+      ? Math.min((annualGross - CPP2_THRESHOLD) * CPP2_RATE, CPP2_MAX)
+      : 0;
+
+  const cpp2 = +(annualCPP2 / PP).toFixed(2);
+
+  const totalCPP = +(cpp + cpp2).toFixed(2);
+
+  // ─────────────────────────────────────────────
+  // EI (SAFE CRA MODEL)
+  // ─────────────────────────────────────────────
+  const EI_RATE = 0.0166;
+  const EI_MAX = 1049.12;
+
+  const annualEI = Math.min(annualGross * EI_RATE, EI_MAX);
+  const ei = +(annualEI / PP).toFixed(2);
+
+  // ─────────────────────────────────────────────
+  // FEDERAL TAX (BRACKET SYSTEM)
+  // ─────────────────────────────────────────────
+  const FED_BRACKETS = [
+    { min: 0, max: 57375, rate: 0.15, base: 0 },
+    { min: 57375, max: 114750, rate: 0.205, base: 8606.25 },
+    { min: 114750, max: 177882, rate: 0.26, base: 20363.38 },
+    { min: 177882, max: 253414, rate: 0.29, base: 36797.3 },
+    { min: 253414, max: Infinity, rate: 0.33, base: 58706.96 },
+  ];
+
+  const federalRaw = (() => {
+    for (const b of FED_BRACKETS) {
+      if (annualGross <= b.max) {
+        return b.base + (annualGross - b.min) * b.rate;
+      }
+    }
+    return 0;
+  })();
+
+  const fedCredits =
+    td1Fed * 0.15 +
+    (FED_BASIC_PERSONAL || 16129) * 0.15;
+
+  const annualFedTax = Math.max(federalRaw - fedCredits, 0);
+  const fedTax = +(annualFedTax / PP).toFixed(2);
+
+  // ─────────────────────────────────────────────
+  // PROVINCIAL TAX (SAFE BPA MODEL)
+  // ─────────────────────────────────────────────
+  const province = emp.province || "ON";
+  const prov = PROV_TAX?.[province] || PROV_TAX.ON;
+
+  const provRaw = calcBracketTax(annualGross, prov.brackets);
+
+  const provCredits = prov.bpa * (prov.brackets[0]?.rate || 0.05);
+
+  let annualProvTax = Math.max(provRaw - provCredits, 0);
+
+  if (prov.surtax) {
+    annualProvTax += calcONSurtax(annualProvTax);
+  }
+
+  const provTax = +(annualProvTax / PP).toFixed(2);
+
+  // ─────────────────────────────────────────────
+  // NET PAY
+  // ─────────────────────────────────────────────
+  const tax = +(fedTax + provTax).toFixed(2);
+
+  const net = +(gross - totalCPP - ei - tax).toFixed(2);
+
+  return {
+    gross: +gross.toFixed(2),
+
+    cpp: totalCPP,
+    cpp1: cpp,
+    cpp2: cpp2,
+
+    ei,
+
+    fedTax,
+    provTax,
+    tax,
+
+    net: Math.max(net, 0),
+
+    annualGross,
+    annualCPP,
+    annualEI,
+    annualFedTax,
+    annualProvTax,
+  };
+}
+
+
+// ─── CRA 2025 Constants ───────────────────────────────────────────────────────
+
+// CPP
+const CPP_RATE        = 0.0595;
+const CPP_MAX_CONTRIB = 3867.50;  // employee max annual
+const CPP_EXEMPTION   = 3500.00;  // basic annual exemption
+const CPP2_RATE       = 0.04;
+const CPP2_MAX        = 396.00;   // CPP2 max annual (2025)
+const CPP2_THRESHOLD  = 73200.00; // CPP2 starts above this annual earnings
+
+// EI
+const EI_RATE         = 0.0166;
+const EI_MAX_CONTRIB  = 1049.12;  // employee max annual
+
+// Pay periods per year
+const PAY_PERIODS = { "Weekly": 52, "Bi-weekly": 26, "Semi-monthly": 24, "Monthly": 12 };
+
+// Federal 2025 tax brackets (T4127)
+const FED_BRACKETS = [
+  { min: 0,       max: 57375,   rate: 0.15,   base: 0        },
+  { min: 57375,   max: 114750,  rate: 0.205,  base: 8606.25  },
+  { min: 114750,  max: 177882,  rate: 0.26,   base: 20363.38 },
+  { min: 177882,  max: 253414,  rate: 0.29,   base: 36797.30 },
+  { min: 253414,  max: Infinity,rate: 0.33,   base: 58706.96 },
+];
+
+// Federal non-refundable credits 2025
+const FED_BASIC_PERSONAL  = 16129.00; // BPA 2025
+const FED_CPP_CREDIT_RATE = 0.15;
+const FED_EI_CREDIT_RATE  = 0.15;
+
+// Provincial 2025 brackets & BPA
+const PROV_TAX = {
+  ON: {
+    brackets: [
+      { min: 0,      max: 51446,   rate: 0.0505, base: 0        },
+      { min: 51446,  max: 102894,  rate: 0.0915, base: 2598.02  },
+      { min: 102894, max: 150000,  rate: 0.1116, base: 7306.11  },
+      { min: 150000, max: 220000,  rate: 0.1216, base: 12559.47 },
+      { min: 220000, max: Infinity,rate: 0.1316, base: 24079.47 },
+    ],
+    bpa: 11865,
+    surtax: true,
+  },
+  BC: {
+    brackets: [
+      { min: 0,      max: 45654,   rate: 0.0506, base: 0       },
+      { min: 45654,  max: 91310,   rate: 0.077,  base: 2310.09 },
+      { min: 91310,  max: 104835,  rate: 0.105,  base: 5822.41 },
+      { min: 104835, max: 127299,  rate: 0.1229, base: 7244.63 },
+      { min: 127299, max: 172602,  rate: 0.147,  base: 10010.69},
+      { min: 172602, max: 240716,  rate: 0.168,  base: 16673.18},
+      { min: 240716, max: Infinity,rate: 0.205,  base: 28115.58},
+    ],
+    bpa: 11981,
+    surtax: false,
+  },
+  AB: {
+    brackets: [
+      { min: 0,      max: 148269,  rate: 0.10,   base: 0        },
+      { min: 148269, max: 177922,  rate: 0.12,   base: 14826.90 },
+      { min: 177922, max: 237230,  rate: 0.13,   base: 18385.26 },
+      { min: 237230, max: 355845,  rate: 0.14,   base: 26096.16 },
+      { min: 355845, max: Infinity,rate: 0.15,   base: 42706.46 },
+    ],
+    bpa: 21003,
+    surtax: false,
+  },
+  QC: {
+    brackets: [
+      { min: 0,      max: 51780,   rate: 0.14,   base: 0        },
+      { min: 51780,  max: 103545,  rate: 0.19,   base: 7249.20  },
+      { min: 103545, max: 126000,  rate: 0.24,   base: 17084.75 },
+      { min: 126000, max: Infinity,rate: 0.2575, base: 22473.95 },
+    ],
+    bpa: 17183,
+    surtax: false,
+  },
+  MB: {
+    brackets: [
+      { min: 0,      max: 47000,   rate: 0.108,  base: 0       },
+      { min: 47000,  max: 100000,  rate: 0.1275, base: 5076.00 },
+      { min: 100000, max: Infinity,rate: 0.174,  base: 11832.75},
+    ],
+    bpa: 15780,
+    surtax: false,
+  },
+  SK: {
+    brackets: [
+      { min: 0,      max: 49720,   rate: 0.105,  base: 0       },
+      { min: 49720,  max: 142058,  rate: 0.125,  base: 5220.60 },
+      { min: 142058, max: Infinity,rate: 0.145,  base: 16762.85},
+    ],
+    bpa: 17661,
+    surtax: false,
+  },
+  NS: {
+    brackets: [
+      { min: 0,      max: 29590,   rate: 0.0879, base: 0       },
+      { min: 29590,  max: 59180,   rate: 0.1495, base: 2601.95 },
+      { min: 59180,  max: 93000,   rate: 0.1667, base: 7028.34 },
+      { min: 93000,  max: 150000,  rate: 0.175,  base: 13669.40},
+      { min: 150000, max: Infinity,rate: 0.21,   base: 23644.40},
+    ],
+    bpa: 8481,
+    surtax: false,
+  },
+  NB: {
+    brackets: [
+      { min: 0,      max: 47715,   rate: 0.094,  base: 0       },
+      { min: 47715,  max: 95431,   rate: 0.14,   base: 4485.21 },
+      { min: 95431,  max: 176756,  rate: 0.16,   base: 11165.65},
+      { min: 176756, max: Infinity,rate: 0.195,  base: 24177.65},
+    ],
+    bpa: 12458,
+    surtax: false,
+  },
+  NL: {
+    brackets: [
+      { min: 0,      max: 43198,   rate: 0.087,  base: 0       },
+      { min: 43198,  max: 86395,   rate: 0.145,  base: 3758.23 },
+      { min: 86395,  max: 154244,  rate: 0.158,  base: 10022.52},
+      { min: 154244, max: 215943,  rate: 0.178,  base: 20743.30},
+      { min: 215943, max: 275870,  rate: 0.198,  base: 31726.90},
+      { min: 275870, max: Infinity,rate: 0.213,  base: 43585.35},
+    ],
+    bpa: 10818,
+    surtax: false,
+  },
+  PE: {
+    brackets: [
+      { min: 0,      max: 32656,   rate: 0.096,  base: 0       },
+      { min: 32656,  max: 64313,   rate: 0.1337, base: 3135.98 },
+      { min: 64313,  max: 105000,  rate: 0.167,  base: 7367.59 },
+      { min: 105000, max: 140000,  rate: 0.18,   base: 14152.06},
+      { min: 140000, max: Infinity,rate: 0.1865, base: 20452.06},
+    ],
+    bpa: 12000,
+    surtax: false,
+  },
+};
+
+// ─── CRA Tax Bracket Helper ───────────────────────────────────────────────────
+function calcBracketTax(annualIncome, brackets) {
+  for (const b of brackets) {
+    if (annualIncome <= b.max) {
+      return b.base + (annualIncome - b.min) * b.rate;
+    }
+  }
+  return 0;
+}
+
+// ─── Ontario Surtax (2025) ────────────────────────────────────────────────────
+function calcONSurtax(basicProvTax) {
+  let surtax = 0;
+  if (basicProvTax > 5315) surtax += (basicProvTax - 5315) * 0.20;
+  if (basicProvTax > 6802) surtax += (basicProvTax - 6802) * 0.36;
+  return surtax;
+}
+
+// ─── Main CRA-Compliant Calculation Engine ────────────────────────────────────
+function calcPayroll(
+  emp,
+  regHrs,
+  otHrs,
+  bonus,
+  statHrs   = 0,
+  vacRate   = 0.04,
+  payFreq   = "Semi-monthly",
+  td1Fed    = 16129,   // employee's federal TD1 claim
+  td1Prov   = null     // employee's provincial TD1 (null = use province BPA)
+) {
+  const PP       = PAY_PERIODS[payFreq] || 24;
+  const province = emp.province || "ON";
+  const provData = PROV_TAX[province] || PROV_TAX["ON"];
+
+  const reg  = parseFloat(regHrs)  || 0;
+  const ot   = parseFloat(otHrs)   || 0;
+  const bon  = parseFloat(bonus)   || 0;
+  const stat = parseFloat(statHrs) || 0;
+
+  // ── Step 1: Gross Earnings This Period ──────────────────────────────────────
+  let regularPay = 0, otPay = 0, statPay = 0;
+
+  if (emp.type === "Hourly") {
+    regularPay = reg * emp.rate;
+    otPay      = ot  * emp.rate * 1.5;
+    statPay    = stat * emp.rate * 1.5;
+  } else {
+    regularPay = emp.rate / PP;
+    const dailyRate = emp.rate / 261;
+    statPay    = stat * (dailyRate / 8) * 0.5;
+  }
+
+  const baseEarnings = +(regularPay + otPay + statPay + bon).toFixed(2);
+  const vacPay       = +(baseEarnings * vacRate).toFixed(2);
+  const grossPeriod  = +(baseEarnings + vacPay).toFixed(2);
+
+  // ── Step 2: CPP (T4127 Section A) ───────────────────────────────────────────
+  // Annual CPP-pensionable earnings (gross × PP − basic exemption)
+  const annualPensionable = grossPeriod * PP;
+  const pensionableNet    = Math.max(annualPensionable - CPP_EXEMPTION, 0);
+  const annualCPP         = Math.min(pensionableNet * CPP_RATE, CPP_MAX_CONTRIB);
+  const periodCPP         = +(annualCPP / PP).toFixed(2);
+
+  // CPP2 (on earnings above the Year's Maximum Pensionable Earnings, 2025)
+  const annualCPP2 = annualPensionable > CPP2_THRESHOLD
+    ? Math.min((annualPensionable - CPP2_THRESHOLD) * CPP2_RATE, CPP2_MAX)
+    : 0;
+  const periodCPP2 = +(annualCPP2 / PP).toFixed(2);
+
+  const totalCPP = +(periodCPP + periodCPP2).toFixed(2);
+
+  // ── Step 3: EI (T4127 Section B) ────────────────────────────────────────────
+  const annualEI  = Math.min(grossPeriod * PP * EI_RATE, EI_MAX_CONTRIB);
+  const periodEI  = +(annualEI / PP).toFixed(2);
+
+  // ── Step 4: Federal Tax (T4127 Section C — Method 1) ────────────────────────
+  // Annualize
+  const annualGross = grossPeriod * PP;
+
+  // Federal non-refundable tax credits
+  const fedCredits =
+    td1Fed * 0.15 +          // basic personal amount credit
+    annualCPP  * FED_CPP_CREDIT_RATE +
+    annualCPP2 * FED_CPP_CREDIT_RATE +
+    annualEI   * FED_EI_CREDIT_RATE;
+
+  const annualFedTax  = Math.max(calcBracketTax(annualGross, FED_BRACKETS) - fedCredits, 0);
+  const periodFedTax  = +(annualFedTax / PP).toFixed(2);
+
+  // ── Step 5: Provincial Tax (T4127 Section D) ─────────────────────────────────
+  const provBPA      = td1Prov ?? provData.bpa;
+  const provCredits  =
+    provBPA * (provData.brackets[0]?.rate || 0.0505) +
+    annualCPP  * (provData.brackets[0]?.rate || 0.0505) +
+    annualEI   * (provData.brackets[0]?.rate || 0.0505);
+
+  let annualProvTax = Math.max(calcBracketTax(annualGross, provData.brackets) - provCredits, 0);
+
+  // Ontario surtax
+  if (provData.surtax) {
+    annualProvTax += calcONSurtax(annualProvTax);
+  }
+
+  const periodProvTax = +(annualProvTax / PP).toFixed(2);
+
+  // ── Step 6: Net Pay ──────────────────────────────────────────────────────────
+  const totalTax = +(periodFedTax + periodProvTax).toFixed(2);
+  const net      = +(grossPeriod - totalCPP - periodEI - totalTax).toFixed(2);
+
+  return {
+    gross:       grossPeriod,
+    cpp:         totalCPP,
+    cpp1:        periodCPP,
+    cpp2:        periodCPP2,
+    ei:          periodEI,
+    fedTax:      periodFedTax,
+    provTax:     periodProvTax,
+    tax:         totalTax,
+    net:         Math.max(net, 0),
+    baseEarnings,
+    vacPay,
+    regularPay:  +regularPay.toFixed(2),
+    otPay:       +otPay.toFixed(2),
+    statPay:     +statPay.toFixed(2),
+    bon:         +bon.toFixed(2),
+  };
+}
 
 // Vacation pay is always paid out each period (added to gross).
 // CRA requires CPP, EI, and income tax to be withheld on vacation pay.
