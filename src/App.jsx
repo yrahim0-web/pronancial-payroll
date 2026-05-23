@@ -647,6 +647,7 @@ function RunPayrollPage({ company, setPage }) {
   const [hours, setHours] = useState(() => Object.fromEntries(emps.map(e => [e.id, { reg:"80", ot:"0", stat:"0", bonus:"0", vacRate:"4%" }])));
   const [processed, setProcessed] = useState(false);
 const [saving, setSaving] = useState(false);
+const [showPreview, setShowPreview] = useState(false); 
   const [period] = useState("Jun 1–15, 2025");
 
   const rows = emps.map(e => {
@@ -760,7 +761,7 @@ const [saving, setSaving] = useState(false);
             <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 p-3 rounded-xl"><AlertCircle size={14}/> Review CPP exemptions</div>
           </div>
           <div className="mt-4 space-y-2">
-            <button className="w-full py-2 border border-blue-600 text-blue-600 rounded-xl text-sm hover:bg-blue-50 transition-colors">Preview Payroll</button>
+            <button className="w-full py-2 border border-blue-600 text-blue-600 rounded-xl text-sm hover:bg-blue-50 transition-colors"onClick={() => setShowPreview(true)}>Preview Payroll</button>
             <button onClick={async () => {
   setSaving(true);
   const { data } = await supabase
