@@ -61,160 +61,6 @@ const DEDUCTION_DATA = [
 ];
 
 const VAC_RATES = { "4%": 0.04, "6%": 0.06, "8%": 0.08 };
-function calcPayroll(
-  emp,
-  regHrs,
-  otHrs,
-  bonus,
-  statHrs = 0,
-  vacRate = 0.04,
-  payFreq = "Semi-monthly",
-  td1Fed = 16129,
-  td1Prov = null
-) {
-  const PP = PAY_PERIODS[payFreq] || 24;
-
-  const reg = Number(regHrs || 0);
-  const ot = Number(otHrs || 0);
-  const bon = Number(bonus || 0);
-  const stat = Number(statHrs || 0);
-
-  // ─────────────────────────────────────────────
-  // GROSS EARNINGS
-  // ─────────────────────────────────────────────
-  let baseEarnings = 0;
-  let statPay = 0;
-
-  if (emp.type === "Hourly") {
-    const regPay = reg * emp.rate;
-    const otPay = ot * emp.rate * 1.5;
-    statPay = stat * emp.rate * 1.5;
-    baseEarnings = regPay + otPay + statPay + bon;
-  } else {
-    const salaryPerPeriod = emp.rate / PP;
-    const dailyRate = emp.rate / 261;
-    statPay = stat * (dailyRate / 8) * 1.5;
-    baseEarnings = salaryPerPeriod + statPay + bon;
-  }
-
-  const vacPay = baseEarnings * vacRate;
-  const gross = +(baseEarnings + vacPay).toFixed(2);
-
-  // ─────────────────────────────────────────────
-  // ANNUALIZATION (CRA CORE)
-  // ─────────────────────────────────────────────
-  const annualGross = gross * PP;
-
-  // ─────────────────────────────────────────────
-  // CPP
-  // ─────────────────────────────────────────────
-  const CPP_RATE = 0.0595;
-  const CPP_MAX = 3867.5;
-  const CPP_EXEMPT = 3500;
-
-  const pensionable = Math.max(annualGross - CPP_EXEMPT, 0);
-  const annualCPP = Math.min(pensionable * CPP_RATE, CPP_MAX);
-
-  const cpp = +(annualCPP / PP).toFixed(2);
-
-  // CPP2
-  const CPP2_RATE = 0.04;
-  const CPP2_MAX = 396;
-  const CPP2_THRESHOLD = 73200;
-
-  const annualCPP2 =
-    annualGross > CPP2_THRESHOLD
-      ? Math.min((annualGross - CPP2_THRESHOLD) * CPP2_RATE, CPP2_MAX)
-      : 0;
-
-  const cpp2 = +(annualCPP2 / PP).toFixed(2);
-
-  const totalCPP = +(cpp + cpp2).toFixed(2);
-
-  // ─────────────────────────────────────────────
-  // EI (SAFE CRA MODEL)
-  // ─────────────────────────────────────────────
-  const EI_RATE = 0.0166;
-  const EI_MAX = 1049.12;
-
-  const annualEI = Math.min(annualGross * EI_RATE, EI_MAX);
-  const ei = +(annualEI / PP).toFixed(2);
-
-  // ─────────────────────────────────────────────
-  // FEDERAL TAX (BRACKET SYSTEM)
-  // ─────────────────────────────────────────────
-  const FED_BRACKETS = [
-    { min: 0, max: 57375, rate: 0.15, base: 0 },
-    { min: 57375, max: 114750, rate: 0.205, base: 8606.25 },
-    { min: 114750, max: 177882, rate: 0.26, base: 20363.38 },
-    { min: 177882, max: 253414, rate: 0.29, base: 36797.3 },
-    { min: 253414, max: Infinity, rate: 0.33, base: 58706.96 },
-  ];
-
-  const federalRaw = (() => {
-    for (const b of FED_BRACKETS) {
-      if (annualGross <= b.max) {
-        return b.base + (annualGross - b.min) * b.rate;
-      }
-    }
-    return 0;
-  })();
-
-  const fedCredits =
-    td1Fed * 0.15 +
-    (FED_BASIC_PERSONAL || 16129) * 0.15;
-
-  const annualFedTax = Math.max(federalRaw - fedCredits, 0);
-  const fedTax = +(annualFedTax / PP).toFixed(2);
-
-  // ─────────────────────────────────────────────
-  // PROVINCIAL TAX (SAFE BPA MODEL)
-  // ─────────────────────────────────────────────
-  const province = emp.province || "ON";
-  const prov = PROV_TAX?.[province] || PROV_TAX.ON;
-
-  const provRaw = calcBracketTax(annualGross, prov.brackets);
-
-  const provCredits = prov.bpa * (prov.brackets[0]?.rate || 0.05);
-
-  let annualProvTax = Math.max(provRaw - provCredits, 0);
-
-  if (prov.surtax) {
-    annualProvTax += calcONSurtax(annualProvTax);
-  }
-
-  const provTax = +(annualProvTax / PP).toFixed(2);
-
-  // ─────────────────────────────────────────────
-  // NET PAY
-  // ─────────────────────────────────────────────
-  const tax = +(fedTax + provTax).toFixed(2);
-
-  const net = +(gross - totalCPP - ei - tax).toFixed(2);
-
-  return {
-    gross: +gross.toFixed(2),
-
-    cpp: totalCPP,
-    cpp1: cpp,
-    cpp2: cpp2,
-
-    ei,
-
-    fedTax,
-    provTax,
-    tax,
-
-    net: Math.max(net, 0),
-
-    annualGross,
-    annualCPP,
-    annualEI,
-    annualFedTax,
-    annualProvTax,
-  };
-}
-
 
 // ─── CRA 2025 Constants ───────────────────────────────────────────────────────
 
@@ -243,7 +89,7 @@ const FED_BRACKETS = [
 ];
 
 // Federal non-refundable credits 2025
-const FED_BASIC_PERSONAL  = 16129.00; // BPA 2025
+const FED_BASIC_PERSONAL  = 15705.00; // TD1 federal 2025
 const FED_CPP_CREDIT_RATE = 0.15;
 const FED_EI_CREDIT_RATE  = 0.15;
 
@@ -257,7 +103,7 @@ const PROV_TAX = {
       { min: 150000, max: 220000,  rate: 0.1216, base: 12559.47 },
       { min: 220000, max: Infinity,rate: 0.1316, base: 24079.47 },
     ],
-    bpa: 11865,
+    bpa: 12989,
     surtax: true,
   },
   BC: {
@@ -385,7 +231,7 @@ function calcPayroll(
   statHrs   = 0,
   vacRate   = 0.04,
   payFreq   = "Semi-monthly",
-  td1Fed    = 16129,   // employee's federal TD1 claim
+  td1Fed    = 15705,   // employee's federal TD1 claim
   td1Prov   = null     // employee's provincial TD1 (null = use province BPA)
 ) {
   const PP       = PAY_PERIODS[payFreq] || 24;
@@ -486,9 +332,12 @@ function calcPayroll(
   };
 }
 
-// Vacation pay is always paid out each period (added to gross).
-// CRA requires CPP, EI, and income tax to be withheld on vacation pay.
-function calcPayroll(emp, regHrs, otHrs, bonus, statHrs = 0, vacRate = 0.04) {
+
+// ─── CRA 2025 Constants ───────────────────────────────────────────────────────
+
+// CPP
+
+function calcPayrollOLD_DELETE(emp, regHrs, otHrs, bonus, statHrs = 0, vacRate = 0.04) {
   const reg  = parseFloat(regHrs)  || 0;
   const ot   = parseFloat(otHrs)   || 0;
   const bon  = parseFloat(bonus)   || 0;
@@ -899,7 +748,7 @@ useEffect(() => {
   };
   fetchEmployees();
 }, [company.id]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "15705", td1Prov: "" });
 
   const filtered = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
   const addEmployee = async () => {
@@ -913,6 +762,9 @@ useEffect(() => {
           rate: form.type === "Salary" ? parseFloat(form.salary)||60000 : parseFloat(form.rate)||20,
           email: form.email,
           hire_date: form.hireDate,
+          position: form.position || "Employee",
+          td1_fed: parseFloat(form.td1Fed) || 15705,
+          td1_prov: parseFloat(form.td1Prov) || null,
         })
         .eq('id', editEmployee.id)
         .select()
@@ -1037,7 +889,8 @@ useEffect(() => {
             <option>Semi-monthly</option><option>Bi-weekly</option><option>Monthly</option>
           </Select>
           <Input label="Vacation Pay %" defaultValue="4" />
-          <Input label="TD1 Claim Amount" defaultValue="15705" />
+          <Input label="Federal TD1 Claim ($)" type="number" value={form.td1Fed} onChange={e=>setForm(p=>({...p,td1Fed:e.target.value}))} placeholder="15705" />
+<Input label="Provincial TD1 Claim ($)" type="number" value={form.td1Prov} onChange={e=>setForm(p=>({...p,td1Prov:e.target.value}))} placeholder="Leave blank for province default" />
           <Input label="Bank Transit Number" placeholder="12345" />
           <Input label="Bank Account Number" placeholder="1234567" />
           <Input label="Institution Number" placeholder="003" />
@@ -1076,7 +929,7 @@ const [showPreview, setShowPreview] = useState(false);
 
   const rows = emps.map(e => {
     const h = hours[e.id] || { reg:"80", ot:"0", stat:"0", bonus:"0", vacRate:"4%" };
-    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04), ...h };
+    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04, "Semi-monthly", e.td1_fed || 15705, e.td1_prov || null), ...h };
   });
 
   const totals = rows.reduce((a, r) => ({
