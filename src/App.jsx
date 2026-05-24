@@ -73,7 +73,7 @@ const CPP2_MAX        = 396.00;   // CPP2 max annual (2025)
 const CPP2_THRESHOLD  = 73200.00; // CPP2 starts above this annual earnings
 
 // EI
-const EI_RATE         = 0.0166;
+const EI_RATE         = 0.01634;
 const EI_MAX_CONTRIB  = 1049.12;  // employee max annual
 
 // Pay periods per year
@@ -283,22 +283,19 @@ function calcPayroll(
   // Annualize
   const annualGross = grossPeriod * PP;
 
-  // Federal non-refundable tax credits
-  const fedCredits =
-    td1Fed * 0.15 +          // basic personal amount credit
-    annualCPP  * FED_CPP_CREDIT_RATE +
-    annualCPP2 * FED_CPP_CREDIT_RATE +
-    annualEI   * FED_EI_CREDIT_RATE;
-
-  const annualFedTax  = Math.max(calcBracketTax(annualGross, FED_BRACKETS) - fedCredits, 0);
-  const periodFedTax  = +(annualFedTax / PP).toFixed(2);
+  const K1 = 0.15 * td1Fed;
+  const K2 = 0.15 * (annualCPP + annualCPP2);
+  const K3 = 0.15 * annualEI;
+  // K4 = Canada Employment Amount (CEA) 2025 = $1,433
+  const T1 = calcBracketTax(annualGross, FED_BRACKETS);
+  const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3, 0);
+  const annualFedTax    = Math.round(annualFedTaxRaw);
+  const periodFedTax    = +(annualFedTax / PP).toFixed(2);
 
   // ── Step 5: Provincial Tax (T4127 Section D) ─────────────────────────────────
-  const provBPA      = td1Prov ?? provData.bpa;
-  const provCredits  =
-    provBPA * (provData.brackets[0]?.rate || 0.0505) +
-    annualCPP  * (provData.brackets[0]?.rate || 0.0505) +
-    annualEI   * (provData.brackets[0]?.rate || 0.0505);
+  const provBPA        = td1Prov ?? provData.bpa;
+  const provLowestRate = provData.brackets[0]?.rate || 0.0505;
+  const provCredits    = (provBPA + annualCPP + annualCPP2 + annualEI) * provLowestRate;
 
   let annualProvTax = Math.max(calcBracketTax(annualGross, provData.brackets) - provCredits, 0);
 
@@ -307,7 +304,8 @@ function calcPayroll(
     annualProvTax += calcONSurtax(annualProvTax);
   }
 
-  const periodProvTax = +(annualProvTax / PP).toFixed(2);
+  const annualProvTaxRounded = Math.round(annualProvTax);
+  const periodProvTax = +(annualProvTaxRounded / PP).toFixed(2);
 
   // ── Step 6: Net Pay ──────────────────────────────────────────────────────────
   const totalTax = +(periodFedTax + periodProvTax).toFixed(2);
@@ -748,7 +746,7 @@ useEffect(() => {
   };
   fetchEmployees();
 }, [company.id]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "15705", td1Prov: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "15705", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4" });
 
   const filtered = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
   const addEmployee = async () => {
@@ -765,6 +763,8 @@ useEffect(() => {
           position: form.position || "Employee",
           td1_fed: parseFloat(form.td1Fed) || 15705,
           td1_prov: parseFloat(form.td1Prov) || null,
+          vac_rate: (form.vacRate || "4") + "%",
+          payroll_schedule: form.paySchedule || "Semi-monthly",
         })
         .eq('id', editEmployee.id)
         .select()
@@ -788,8 +788,8 @@ useEffect(() => {
           sin: "***-***-000",
           email: form.email,
           hire_date: form.hireDate,
-          vac_rate: "4%",
-          payroll_schedule: "Semi-monthly"
+          vac_rate: (form.vacRate || "4") + "%",
+          payroll_schedule: form.paySchedule || "Semi-monthly"
         }])
         .select()
         .single();
@@ -885,10 +885,10 @@ useEffect(() => {
             : <Input label="Hourly Rate ($)" value={form.rate} onChange={e=>setForm(p=>({...p,rate:e.target.value}))} placeholder="25.00" />
           }
           <Input label="Hire Date" type="date" value={form.hireDate} onChange={e=>setForm(p=>({...p,hireDate:e.target.value}))} />
-          <Select label="Payroll Schedule">
-            <option>Semi-monthly</option><option>Bi-weekly</option><option>Monthly</option>
+          <Select label="Payroll Schedule" value={form.paySchedule} onChange={e=>setForm(p=>({...p,paySchedule:e.target.value}))}>
+            <option>Semi-monthly</option><option>Bi-weekly</option><option>Weekly</option><option>Monthly</option>
           </Select>
-          <Input label="Vacation Pay %" defaultValue="4" />
+          <Input label="Vacation Pay %" type="number" value={form.vacRate} onChange={e=>setForm(p=>({...p,vacRate:e.target.value}))} placeholder="4" />
           <Input label="Federal TD1 Claim ($)" type="number" value={form.td1Fed} onChange={e=>setForm(p=>({...p,td1Fed:e.target.value}))} placeholder="15705" />
 <Input label="Provincial TD1 Claim ($)" type="number" value={form.td1Prov} onChange={e=>setForm(p=>({...p,td1Prov:e.target.value}))} placeholder="Leave blank for province default" />
           <Input label="Bank Transit Number" placeholder="12345" />
