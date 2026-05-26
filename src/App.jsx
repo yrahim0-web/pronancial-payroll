@@ -746,7 +746,7 @@ useEffect(() => {
   };
   fetchEmployees();
 }, [company.id]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "15705", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "15705", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "" });
 
   const filtered = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
   const addEmployee = async () => {
@@ -789,7 +789,15 @@ useEffect(() => {
           email: form.email,
           hire_date: form.hireDate,
           vac_rate: (form.vacRate || "4") + "%",
-          payroll_schedule: form.paySchedule || "Semi-monthly"
+          payroll_schedule: form.paySchedule || "Semi-monthly",
+          ytd_gross: parseFloat(form.ytd_gross) || 0,
+          ytd_cpp: parseFloat(form.ytd_cpp) || 0,
+          ytd_ei: parseFloat(form.ytd_ei) || 0,
+          ytd_fed_tax: parseFloat(form.ytd_fed_tax) || 0,
+          ytd_prov_tax: parseFloat(form.ytd_prov_tax) || 0,
+          ytd_vac: parseFloat(form.ytd_vac) || 0,
+          ytd_er_cpp: parseFloat(form.ytd_er_cpp) || 0,
+          ytd_er_ei: parseFloat(form.ytd_er_ei) || 0
         }])
         .select()
         .single();
@@ -903,6 +911,14 @@ useEffect(() => {
             <Input label="YTD Federal Tax ($)" type="number" value={form.ytd_fed_tax||""} onChange={e=>setForm(p=>({...p,ytd_fed_tax:e.target.value}))} placeholder="0.00" />
             <Input label="YTD Provincial Tax ($)" type="number" value={form.ytd_prov_tax||""} onChange={e=>setForm(p=>({...p,ytd_prov_tax:e.target.value}))} placeholder="0.00" />
             <Input label="YTD Vacation Pay ($)" type="number" value={form.ytd_vac||""} onChange={e=>setForm(p=>({...p,ytd_vac:e.target.value}))} placeholder="0.00" />
+          </div>
+        </div>
+        <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Employer YTD Contributions</p>
+          <p className="text-xs text-gray-400 mb-3">Enter employer year-to-date contributions if mid-year transfer.</p>
+          <div className="grid grid-cols-3 gap-4">
+            <Input label="Employer YTD CPP ($)" type="number" value={form.ytd_er_cpp||""} onChange={e=>setForm(p=>({...p,ytd_er_cpp:e.target.value}))} placeholder="0.00" />
+            <Input label="Employer YTD EI ($)" type="number" value={form.ytd_er_ei||""} onChange={e=>setForm(p=>({...p,ytd_er_ei:e.target.value}))} placeholder="0.00" />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6">
