@@ -851,7 +851,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?e.rate:"", rate: e.type==="Hourly"?e.rate:"", hireDate: e.hire_date||"" }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?e.rate:"", rate: e.type==="Hourly"?e.rate:"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||15705), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%","") }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -891,11 +891,19 @@ useEffect(() => {
           <Input label="Vacation Pay %" type="number" value={form.vacRate} onChange={e=>setForm(p=>({...p,vacRate:e.target.value}))} placeholder="4" />
           <Input label="Federal TD1 Claim ($)" type="number" value={form.td1Fed} onChange={e=>setForm(p=>({...p,td1Fed:e.target.value}))} placeholder="15705" />
 <Input label="Provincial TD1 Claim ($)" type="number" value={form.td1Prov} onChange={e=>setForm(p=>({...p,td1Prov:e.target.value}))} placeholder="Leave blank for province default" />
-          <Input label="Bank Transit Number" placeholder="12345" />
-          <Input label="Bank Account Number" placeholder="1234567" />
-          <Input label="Institution Number" placeholder="003" />
           <Input label="Position / Job Title" placeholder="Software Developer" />
-          <Input label="Department" placeholder="Engineering" />
+        </div>
+        <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Opening YTD Balances</p>
+          <p className="text-xs text-gray-400 mb-3">Enter existing year-to-date balances if employee is mid-year transfer from another payroll system.</p>
+          <div className="grid grid-cols-3 gap-4">
+            <Input label="YTD Gross ($)" type="number" value={form.ytd_gross||""} onChange={e=>setForm(p=>({...p,ytd_gross:e.target.value}))} placeholder="0.00" />
+            <Input label="YTD CPP ($)" type="number" value={form.ytd_cpp||""} onChange={e=>setForm(p=>({...p,ytd_cpp:e.target.value}))} placeholder="0.00" />
+            <Input label="YTD EI ($)" type="number" value={form.ytd_ei||""} onChange={e=>setForm(p=>({...p,ytd_ei:e.target.value}))} placeholder="0.00" />
+            <Input label="YTD Federal Tax ($)" type="number" value={form.ytd_fed_tax||""} onChange={e=>setForm(p=>({...p,ytd_fed_tax:e.target.value}))} placeholder="0.00" />
+            <Input label="YTD Provincial Tax ($)" type="number" value={form.ytd_prov_tax||""} onChange={e=>setForm(p=>({...p,ytd_prov_tax:e.target.value}))} placeholder="0.00" />
+            <Input label="YTD Vacation Pay ($)" type="number" value={form.ytd_vac||""} onChange={e=>setForm(p=>({...p,ytd_vac:e.target.value}))} placeholder="0.00" />
+          </div>
         </div>
         <div className="flex justify-end gap-3 mt-6">
           <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50">Cancel</button>
@@ -917,18 +925,31 @@ function RunPayrollPage({ company, setPage }) {
         .select('*')
         .eq('company_id', company.id)
         .eq('status', 'active');
-      if (data) setEmps(data);
+      if (data) {
+        setEmps(data);
+        const initHours = {};
+        data.forEach(e => {
+          initHours[e.id] = {
+            reg: e.type === "Salary" ? "80" : "0",
+            ot: "0", stat: "0", bonus: "0",
+            vacRate: e.vac_rate || "4%"
+          };
+        });
+        setHours(initHours);
+      }
     };
     fetchEmps();
   }, [company.id]);
-  const [hours, setHours] = useState(() => Object.fromEntries(emps.map(e => [e.id, { reg:"80", ot:"0", stat:"0", bonus:"0", vacRate:"4%" }])));
+  const [hours, setHours] = useState({});
   const [processed, setProcessed] = useState(false);
 const [saving, setSaving] = useState(false);
 const [showPreview, setShowPreview] = useState(false); 
   const [period] = useState("Jun 1–15, 2025");
 
   const rows = emps.map(e => {
-    const h = hours[e.id] || { reg:"80", ot:"0", stat:"0", bonus:"0", vacRate:"4%" };
+    const defaultReg = e.type === "Salary" ? "80" : "0";
+    const defaultVac = (e.vac_rate || "4%").replace("%","");
+    const h = hours[e.id] || { reg: defaultReg, ot:"0", stat:"0", bonus:"0", vacRate: defaultVac + "%" };
     return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04, "Semi-monthly", e.td1_fed || 15705, e.td1_prov || null), ...h };
   });
 
@@ -1055,12 +1076,29 @@ const [showPreview, setShowPreview] = useState(false);
       details: rows.map(r => ({
         employee_id: r.id,
         name: r.name,
+        province: r.province,
+        emp_type: r.type,
+        rate: r.rate,
+        reg_hrs: r.reg || "0",
+        ot_hrs: r.ot || "0",
+        stat_hrs: r.stat || "0",
         gross: r.gross,
+        base_earnings: r.baseEarnings,
+        vac_pay: r.vacPay,
         cpp: r.cpp,
         ei: r.ei,
+        fed_tax: +(r.fedTax || 0).toFixed(2),
+        prov_tax: +(r.provTax || 0).toFixed(2),
         tax: r.tax,
         net: r.net,
-        vac_pay: r.vacPay
+        er_cpp: +(r.cpp || 0).toFixed(2),
+        er_ei: +((r.ei || 0) * 1.4).toFixed(2),
+        ytd_gross: r.ytd_gross || 0,
+        ytd_cpp: r.ytd_cpp || 0,
+        ytd_ei: r.ytd_ei || 0,
+        ytd_fed_tax: r.ytd_fed_tax || 0,
+        ytd_prov_tax: r.ytd_prov_tax || 0,
+        ytd_vac: r.ytd_vac || 0,
       }))
     }])
     .select()
@@ -1079,25 +1117,26 @@ const [showPreview, setShowPreview] = useState(false);
 
 // ─── Paystub ─────────────────────────────────────────────────────────────────
 function PaystubsPage({ company }) {
-  const [emps, setEmps] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [runs, setRuns] = useState([]);
+  const [selectedRun, setSelectedRun] = useState(null);
+  const [selectedEmp, setSelectedEmp] = useState(null);
 
   useEffect(() => {
-    const fetchEmps = async () => {
-      const { data } = await supabase
-        .from('employees')
-        .select('*')
-        .eq('company_id', company.id)
-        .eq('status', 'active');
-      if (data && data.length > 0) {
-        setEmps(data);
-        setSelected(data[0]);
-      }
-    };
-    fetchEmps();
+    supabase
+      .from('payroll_runs')
+      .select('*')
+      .eq('company_id', company.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setRuns(data);
+          setSelectedRun(data[0]);
+          if (data[0].details?.length > 0) {
+            setSelectedEmp(data[0].details[0]);
+          }
+        }
+      });
   }, [company.id]);
-  const calc = selected ? calcPayroll(selected, 80, 0, 0) : null;
-  const ytd = calc ? { gross: calc.gross*11, cpp: calc.cpp*11, ei: calc.ei*11, tax: calc.tax*11, net: calc.net*11 } : null;
 
   return (
     <div className="p-6 space-y-6">
@@ -1107,16 +1146,26 @@ function PaystubsPage({ company }) {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <Card className="p-4">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Select Employee</h3>
-          <div className="space-y-1">
-            {emps.map(e => (
-              <button key={e.id} onClick={() => setSelected(e)} className={`w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors ${selected?.id===e.id ? "bg-blue-600 text-white" : "hover:bg-gray-50 text-gray-700"}`}>
-                <p className="font-medium">{e.name}</p>
-                <p className={`text-xs ${selected?.id===e.id?"text-blue-200":"text-gray-400"}`}>{e.position}</p>
+          <div className="space-y-1 mb-3">
+            {runs.map(r => (
+              <button key={r.id} onClick={() => { setSelectedRun(r); setSelectedEmp(r.details?.[0]||null); }} className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-colors ${selectedRun?.id===r.id ? "bg-blue-600 text-white" : "hover:bg-gray-50 text-gray-700"}`}>
+                <p className="font-medium">{r.period}</p>
+                <p className={`text-xs ${selectedRun?.id===r.id?"text-blue-200":"text-gray-400"}`}>{r.pay_date}</p>
               </button>
             ))}
           </div>
+          {selectedRun?.details?.length > 0 && <>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Employees</h3>
+            <div className="space-y-1">
+              {selectedRun.details.map((e,i) => (
+                <button key={i} onClick={() => setSelectedEmp(e)} className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-colors ${selectedEmp?.employee_id===e.employee_id ? "bg-blue-600 text-white" : "hover:bg-gray-50 text-gray-700"}`}>
+                  <p className="font-medium">{e.name}</p>
+                </button>
+              ))}
+            </div>
+          </>}
         </Card>
-        {selected && calc ? (
+        {selectedEmp && selectedRun ? (
           <Card className="lg:col-span-3 p-6">
             <div className="flex items-start justify-between mb-6">
               <div>
@@ -1137,16 +1186,15 @@ function PaystubsPage({ company }) {
               <div className="p-5 grid grid-cols-2 gap-6">
                 <div>
                   <p className="text-xs text-gray-400 mb-1">Employee</p>
-                  <p className="text-sm font-semibold text-gray-900">{selected.name}</p>
-                  <p className="text-xs text-gray-500">{selected.position}</p>
-                  <p className="text-xs text-gray-500 mt-1">SIN: {selected.sin}</p>
-                  <p className="text-xs text-gray-500">{company.province}</p>
+                  <p className="text-sm font-semibold text-gray-900">{selectedEmp.name}</p>
+                  <p className="text-xs text-gray-500">Employee</p>
+                  <p className="text-xs text-gray-500">{selectedEmp.province || company.province}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-400 mb-1">Pay Details</p>
-                  <p className="text-xs text-gray-600">Payment: Jun 15, 2025</p>
+                  <p className="text-xs text-gray-600">Payment: {selectedRun.pay_date}</p>
                   <p className="text-xs text-gray-600">Frequency: Semi-monthly</p>
-                  <p className="text-xs text-gray-600">Pay Period: Jun 1–15</p>
+                  <p className="text-xs text-gray-600">Pay Period: {selectedRun.period}</p>
                   <p className="text-xs text-gray-600">Direct Deposit</p>
                 </div>
               </div>
@@ -1158,18 +1206,25 @@ function PaystubsPage({ company }) {
                     <th className="text-right px-5 py-2">YTD ($)</th>
                   </tr></thead>
                   <tbody className="divide-y divide-gray-50">
-                    <tr><td className="px-5 py-2.5 text-gray-700 font-medium">Gross Earnings</td><td className="px-5 py-2.5 text-right font-semibold text-gray-900">{calc.gross.toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-600">{ytd.gross.toFixed(2)}</td></tr>
-                    <tr className="bg-gray-50"><td className="px-5 py-1.5 text-xs text-gray-400 italic" colSpan={3}>Deductions</td></tr>
-                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">CPP Contributions</td><td className="px-5 py-2.5 text-right text-red-500">({calc.cpp.toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({ytd.cpp.toFixed(2)})</td></tr>
-                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">EI Premiums</td><td className="px-5 py-2.5 text-right text-red-500">({calc.ei.toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({ytd.ei.toFixed(2)})</td></tr>
-                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Federal Income Tax</td><td className="px-5 py-2.5 text-right text-red-500">({(calc.tax*0.6).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(ytd.tax*0.6).toFixed(2)})</td></tr>
-                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Provincial Income Tax</td><td className="px-5 py-2.5 text-right text-red-500">({(calc.tax*0.4).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(ytd.tax*0.4).toFixed(2)})</td></tr>
-                    <tr className="bg-blue-50"><td className="px-5 py-3 font-bold text-gray-900">Net Pay</td><td className="px-5 py-3 text-right font-bold text-emerald-700 text-base">${calc.net.toFixed(2)}</td><td className="px-5 py-3 text-right font-semibold text-gray-700">${ytd.net.toFixed(2)}</td></tr>
+                    <tr className="bg-green-50"><td className="px-5 py-1.5 text-xs font-semibold text-green-700" colSpan={3}>Earnings</td></tr>
+                    {selectedEmp.emp_type === "Hourly" && <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Hours Worked</td><td className="px-5 py-2.5 text-right text-gray-700">{+selectedEmp.reg_hrs||0} hrs @ ${+selectedEmp.rate||0}/hr</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>}
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Base Earnings</td><td className="px-5 py-2.5 text-right text-gray-700">{(+selectedEmp.base_earnings||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Vacation Pay</td><td className="px-5 py-2.5 text-right text-purple-600">{(+selectedEmp.vac_pay||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">{(+selectedEmp.ytd_vac||0).toFixed(2)}</td></tr>
+                    <tr className="bg-gray-50"><td className="px-5 py-2.5 font-semibold text-gray-800">Gross Earnings</td><td className="px-5 py-2.5 text-right font-semibold text-gray-900">{(+selectedEmp.gross||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right font-semibold text-gray-700">{(+selectedEmp.ytd_gross||0).toFixed(2)}</td></tr>
+                    <tr className="bg-red-50"><td className="px-5 py-1.5 text-xs font-semibold text-red-700" colSpan={3}>Employee Deductions</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">CPP Contributions</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.cpp||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(+selectedEmp.ytd_cpp||0).toFixed(2)})</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">EI Premiums</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.ei||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(+selectedEmp.ytd_ei||0).toFixed(2)})</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Federal Income Tax</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.fed_tax||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(+selectedEmp.ytd_fed_tax||0).toFixed(2)})</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Provincial Income Tax</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.prov_tax||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(+selectedEmp.ytd_prov_tax||0).toFixed(2)})</td></tr>
+                    <tr className="bg-blue-50"><td className="px-5 py-3 font-bold text-gray-900">Net Pay</td><td className="px-5 py-3 text-right font-bold text-emerald-700 text-base">${(+selectedEmp.net||0).toFixed(2)}</td><td className="px-5 py-3 text-right font-semibold text-gray-700">${((+selectedEmp.ytd_gross||0)-(+selectedEmp.ytd_cpp||0)-(+selectedEmp.ytd_ei||0)-(+selectedEmp.ytd_fed_tax||0)-(+selectedEmp.ytd_prov_tax||0)).toFixed(2)}</td></tr>
+                    <tr className="bg-amber-50"><td className="px-5 py-1.5 text-xs font-semibold text-amber-700" colSpan={3}>Employer Contributions</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Employer CPP (matched)</td><td className="px-5 py-2.5 text-right text-amber-600">{(+selectedEmp.er_cpp||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Employer EI (×1.4)</td><td className="px-5 py-2.5 text-right text-amber-600">{(+selectedEmp.er_ei||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>
                   </tbody>
                 </table>
               </div>
               <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex justify-between">
-                <p className="text-xs text-gray-400">Vacation Pay Accrued (4%): ${(calc.gross*0.04).toFixed(2)}</p>
+                <p className="text-xs text-gray-400">Vacation Pay paid each period per CRA guidelines</p>
                 <p className="text-xs text-gray-400">This is a computer-generated statement</p>
               </div>
             </div>
