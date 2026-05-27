@@ -231,7 +231,7 @@ function calcPayroll(
   statHrs   = 0,
   vacRate   = 0.04,
   payFreq   = "Semi-monthly",
-  td1Fed    = 15705,   // employee's federal TD1 claim
+  td1Fed    = 16452,   // employee's federal TD1 claim 2025
   td1Prov   = null     // employee's provincial TD1 (null = use province BPA)
 ) {
   const PP       = PAY_PERIODS[payFreq] || 24;
@@ -618,31 +618,34 @@ function Dashboard({ company, companies, setPage, setSelectedCompany }) {
 function CompaniesPage({ companies, setCompanies, setSelectedCompany, setPage }) {
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [editCompany, setEditCompany] = useState(null);
   const [form, setForm] = useState({ name: "", opName: "", bn: "", province: "ON", freq: "Semi-monthly", email: "", phone: "" });
   const filtered = companies.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
 
   const addCompany = async () => {
-    const { data, error } = await supabase
-      .from('companies')
-      .insert([{
-        name: form.name || "New Company",
-        bn: form.bn || "000000000RP0001",
-        province: form.province,
-        employees: 0,
-        next_payroll: "2025-06-30",
-        status: "active",
-        remittance: "current",
-        industry: "Other",
-        email: form.email,
-        phone: form.phone,
-        payroll_freq: form.freq
-      }])
-      .select()
-      .single();
-    if (data) {
-      setCompanies(prev => [...prev, data]);
+    if (editCompany) {
+      const { data } = await supabase.from('companies').update({
+        name: form.name, bn: form.bn, province: form.province,
+        email: form.email, phone: form.phone, payroll_freq: form.freq
+      }).eq('id', editCompany.id).select().single();
+      if (data) setCompanies(prev => prev.map(c => c.id === data.id ? data : c));
+      setEditCompany(null);
+    } else {
+      const { data } = await supabase.from('companies').insert([{
+        name: form.name || "New Company", bn: form.bn || "000000000RP0001",
+        province: form.province, employees: 0, next_payroll: "2025-06-30",
+        status: "active", remittance: "current", industry: "Other",
+        email: form.email, phone: form.phone, payroll_freq: form.freq
+      }]).select().single();
+      if (data) setCompanies(prev => [...prev, data]);
     }
     setShowModal(false);
+  };
+
+  const deleteCompany = async (c) => {
+    if (!window.confirm(`Delete ${c.name}? This will also delete all employees and payroll data.`)) return;
+    await supabase.from('companies').delete().eq('id', c.id);
+    setCompanies(prev => prev.filter(x => x.id !== c.id));
   };
 
   return (
@@ -689,7 +692,8 @@ function CompaniesPage({ companies, setCompanies, setSelectedCompany, setPage })
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1">
                       <button onClick={() => { setSelectedCompany(c); setPage("dashboard"); }} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors" title="Open dashboard"><Eye size={14} /></button>
-                      <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors" title="Edit"><Pencil size={14} /></button>
+                      <button onClick={() => { setEditCompany(c); setForm({ name: c.name, bn: c.bn||"", province: c.province||"ON", freq: c.payroll_freq||"Semi-monthly", email: c.email||"", phone: c.phone||"" }); setShowModal(true); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors" title="Edit"><Pencil size={14} /></button>
+                      <button onClick={() => deleteCompany(c)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 transition-colors" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -698,7 +702,7 @@ function CompaniesPage({ companies, setCompanies, setSelectedCompany, setPage })
           </table>
         </div>
       </Card>
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="Add New Company" wide>
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={editCompany ? "Edit Company" : "Add New Company"} wide>
         <div className="grid grid-cols-2 gap-4">
           <Input label="Legal Company Name" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="Maple Ridge Inc." />
           <Input label="Operating Name" value={form.opName} onChange={e=>setForm(p=>({...p,opName:e.target.value}))} placeholder="Maple Ridge" />
@@ -746,7 +750,7 @@ useEffect(() => {
   };
   fetchEmployees();
 }, [company.id]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "15705", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "" });
 
   const filtered = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
   const addEmployee = async () => {
@@ -966,7 +970,7 @@ const [showPreview, setShowPreview] = useState(false);
     const defaultReg = e.type === "Salary" ? "80" : "0";
     const defaultVac = (e.vac_rate || "4%").replace("%","");
     const h = hours[e.id] || { reg: defaultReg, ot:"0", stat:"0", bonus:"0", vacRate: defaultVac + "%" };
-    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04, "Semi-monthly", e.td1_fed || 15705, e.td1_prov || null), ...h };
+    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04, "Semi-monthly", e.td1_fed || 16452, e.td1_prov || null), ...h };
   });
 
   const totals = rows.reduce((a, r) => ({
@@ -1540,6 +1544,25 @@ useEffect(() => {
   const [notifOpen, setNotifOpen] = useState(false);
 
   if (!loggedIn) return <LoginPage onLogin={() => setLoggedIn(true)} />;
+  if (!selectedCompany) return (
+    <div className="min-h-screen flex bg-gray-50">
+      <aside className="w-56 bg-white border-r border-gray-100 flex flex-col">
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100">
+          <div className="w-7 h-7 bg-blue-600 rounded-xl flex items-center justify-center"><DollarSign size={14} className="text-white" /></div>
+          <span className="font-semibold text-sm text-gray-900">Pronancial</span>
+        </div>
+        <div className="flex-1 p-3">
+          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm bg-blue-600 text-white"><Building2 size={16} />Companies</button>
+        </div>
+        <div className="p-3 border-t border-gray-100">
+          <button onClick={async () => { await supabase.auth.signOut(); setLoggedIn(false); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-red-500 hover:bg-red-50"><LogOut size={15} />Sign out</button>
+        </div>
+      </aside>
+      <main className="flex-1 overflow-y-auto">
+        <CompaniesPage companies={companies} setCompanies={setCompanies} setSelectedCompany={setSelectedCompany} setPage={setPage} />
+      </main>
+    </div>
+  );
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -1603,7 +1626,7 @@ useEffect(() => {
           {/* Company selector */}
           <div className="relative">
             <button onClick={() => setCompanyDropdown(o=>!o)} className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="w-5 h-5 bg-blue-100 rounded-md flex items-center justify-center text-xs font-bold text-blue-600">{selectedCompany.name[0]}</div>
+              <div className="w-5 h-5 bg-blue-100 rounded-md flex items-center justify-center text-xs font-bold text-blue-600">{selectedCompany?.name?.[0] || "?"}</div>
               <span className="text-sm font-medium text-gray-800 max-w-32 truncate">{selectedCompany.name}</span>
               <ChevronDown size={13} className="text-gray-400" />
             </button>
