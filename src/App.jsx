@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import {
   LayoutDashboard, Building2, Users, PlayCircle, History, FileText, BarChart2,
@@ -1113,17 +1113,31 @@ const [showPreview, setShowPreview] = useState(false);
         net: r.net,
         er_cpp: +(r.cpp || 0).toFixed(2),
         er_ei: +((r.ei || 0) * 1.4).toFixed(2),
-        ytd_gross: r.ytd_gross || 0,
-        ytd_cpp: r.ytd_cpp || 0,
-        ytd_ei: r.ytd_ei || 0,
-        ytd_fed_tax: r.ytd_fed_tax || 0,
-        ytd_prov_tax: r.ytd_prov_tax || 0,
-        ytd_vac: r.ytd_vac || 0,
+        ytd_gross:    +((r.ytd_gross    || 0) + r.gross).toFixed(2),
+        ytd_cpp:      +((r.ytd_cpp      || 0) + r.cpp).toFixed(2),
+        ytd_ei:       +((r.ytd_ei       || 0) + r.ei).toFixed(2),
+        ytd_fed_tax:  +((r.ytd_fed_tax  || 0) + (r.fedTax || 0)).toFixed(2),
+        ytd_prov_tax: +((r.ytd_prov_tax || 0) + (r.provTax || 0)).toFixed(2),
+        ytd_vac:      +((r.ytd_vac      || 0) + r.vacPay).toFixed(2),
       }))
     }])
     .select()
     .single();
-  if (data) setProcessed(true);
+  if (data) {
+    setProcessed(true);
+    // Update each employee's YTD in database
+    for (const r of rows) {
+      await supabase.from('employees').update({
+        ytd_gross:    +((r.ytd_gross    || 0) + r.gross).toFixed(2),
+        ytd_cpp:      +((r.ytd_cpp      || 0) + r.cpp).toFixed(2),
+        ytd_ei:       +((r.ytd_ei       || 0) + r.ei).toFixed(2),
+        ytd_fed_tax:  +((r.ytd_fed_tax  || 0) + (r.fedTax || 0)).toFixed(2),
+        ytd_prov_tax: +((r.ytd_prov_tax || 0) + (r.provTax || 0)).toFixed(2),
+        ytd_vac:      +((r.ytd_vac      || 0) + r.vacPay).toFixed(2),
+        last_payroll: new Date().toISOString().split('T')[0]
+      }).eq('id', r.id);
+    }
+  }
   setSaving(false);
 }} disabled={processed || saving} className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-sm font-medium transition-colors">
               {processed ? "Payroll Processed ✓" : saving ? "Saving..." : "Process Payroll"}
@@ -1140,6 +1154,20 @@ function PaystubsPage({ company }) {
   const [runs, setRuns] = useState([]);
   const [selectedRun, setSelectedRun] = useState(null);
   const [selectedEmp, setSelectedEmp] = useState(null);
+  const paystubRef = useRef(null);
+
+  const downloadPDF = async () => {
+    if (!paystubRef.current) return;
+    const { default: jsPDF } = await import('jspdf');
+    const { default: html2canvas } = await import('html2canvas');
+    const canvas = await html2canvas(paystubRef.current, { scale: 2, useCORS: true });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+    pdf.save(`paystub-${selectedEmp?.name?.replace(/ /g,'-')}-${selectedRun?.pay_date}.pdf`);
+  };
 
   useEffect(() => {
     supabase
