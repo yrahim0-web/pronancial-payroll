@@ -79,13 +79,13 @@ const EI_MAX_CONTRIB  = 1123.07;  // employee max annual 2026
 // Pay periods per year
 const PAY_PERIODS = { "Weekly": 52, "Bi-weekly": 26, "Semi-monthly": 24, "Monthly": 12 };
 
-// Federal 2026 tax brackets (T4127) — lowest rate 14%
+// Federal 2026 tax brackets (T4032-ON Jan 2026)
 const FED_BRACKETS = [
-  { min: 0,       max: 57375,   rate: 0.14,   base: 0        },
-  { min: 57375,   max: 114750,  rate: 0.205,  base: 8032.50  },
-  { min: 114750,  max: 177882,  rate: 0.26,   base: 19789.63 },
-  { min: 177882,  max: 253414,  rate: 0.29,   base: 36223.55 },
-  { min: 253414,  max: Infinity,rate: 0.33,   base: 58133.21 },
+  { min: 0,       max: 58523,   rate: 0.14,   base: 0        },
+  { min: 58523,   max: 117045,  rate: 0.205,  base: 8193.22  },
+  { min: 117045,  max: 181440,  rate: 0.26,   base: 20189.50 },
+  { min: 181440,  max: 258482,  rate: 0.29,   base: 36927.90 },
+  { min: 258482,  max: Infinity,rate: 0.33,   base: 59249.28 },
 ];
 
 // Federal non-refundable credits 2026
@@ -284,7 +284,9 @@ function calcPayroll(
   // ── Step 4: Federal Tax (T4127 Section C — Method 1) ────────────────────────
   // Annualize
   // CRA taxes on base earnings only (not including vacation pay)
-  const annualGross = baseEarnings * PP;
+  // CRA taxable income = annualized gross - CPP - EI (T4127 Method 1)
+  const annualGross   = baseEarnings * PP;
+  const annualTaxable = annualGross - annualCPP - annualCPP2 - annualEI;
 
   // Canada Employment Amount (CEA) 2026 = $1,433
   const CEA = Math.min(annualGross, 1433);
@@ -292,7 +294,7 @@ function calcPayroll(
   const K2 = 0.14 * (annualCPP + annualCPP2);
   const K3 = 0.14 * annualEI;
   const K4 = 0.14 * CEA;
-  const T1 = calcBracketTax(annualGross, FED_BRACKETS);
+  const T1 = calcBracketTax(annualTaxable, FED_BRACKETS);
   const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
   const annualFedTax    = Math.round(annualFedTaxRaw);
   const periodFedTax    = +(annualFedTax / PP).toFixed(2);
@@ -307,7 +309,7 @@ function calcPayroll(
   const provEICredit   = annualEI * provLowestRate;
   const provCredits    = provTD1Credit + provCPPCredit + provEICredit;
 
-  let annualProvTax = Math.max(calcBracketTax(annualGross, provData.brackets) - provCredits, 0);
+  let annualProvTax = Math.max(calcBracketTax(annualTaxable, provData.brackets) - provCredits, 0);
 
   // Ontario surtax
   if (provData.surtax) {
