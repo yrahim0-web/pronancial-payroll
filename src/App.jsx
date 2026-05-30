@@ -62,36 +62,36 @@ const DEDUCTION_DATA = [
 
 const VAC_RATES = { "4%": 0.04, "6%": 0.06, "8%": 0.08 };
 
-// ─── CRA 2025 Constants ───────────────────────────────────────────────────────
+// ─── CRA 2026 Constants ───────────────────────────────────────────────────────
 
-// CPP
+// CPP 2026
 const CPP_RATE        = 0.0595;
-const CPP_MAX_CONTRIB = 3867.50;  // employee max annual
+const CPP_MAX_CONTRIB = 4230.45;  // employee max annual 2026
 const CPP_EXEMPTION   = 3500.00;  // basic annual exemption
 const CPP2_RATE       = 0.04;
-const CPP2_MAX        = 396.00;   // CPP2 max annual (2025)
-const CPP2_THRESHOLD  = 73200.00; // CPP2 starts above this annual earnings
+const CPP2_MAX        = 416.00;   // CPP2 max annual 2026
+const CPP2_THRESHOLD  = 74600.00; // YMPE 2026
 
-// EI
-const EI_RATE         = 0.01634;
-const EI_MAX_CONTRIB  = 1049.12;  // employee max annual
+// EI 2026
+const EI_RATE         = 0.0163;
+const EI_MAX_CONTRIB  = 1123.07;  // employee max annual 2026
 
 // Pay periods per year
 const PAY_PERIODS = { "Weekly": 52, "Bi-weekly": 26, "Semi-monthly": 24, "Monthly": 12 };
 
-// Federal 2025 tax brackets (T4127)
+// Federal 2026 tax brackets (T4127) — lowest rate 14%
 const FED_BRACKETS = [
-  { min: 0,       max: 57375,   rate: 0.15,   base: 0        },
-  { min: 57375,   max: 114750,  rate: 0.205,  base: 8606.25  },
-  { min: 114750,  max: 177882,  rate: 0.26,   base: 20363.38 },
-  { min: 177882,  max: 253414,  rate: 0.29,   base: 36797.30 },
-  { min: 253414,  max: Infinity,rate: 0.33,   base: 58706.96 },
+  { min: 0,       max: 57375,   rate: 0.14,   base: 0        },
+  { min: 57375,   max: 114750,  rate: 0.205,  base: 8032.50  },
+  { min: 114750,  max: 177882,  rate: 0.26,   base: 19789.63 },
+  { min: 177882,  max: 253414,  rate: 0.29,   base: 36223.55 },
+  { min: 253414,  max: Infinity,rate: 0.33,   base: 58133.21 },
 ];
 
-// Federal non-refundable credits 2025
-const FED_BASIC_PERSONAL  = 15705.00; // TD1 federal 2025
-const FED_CPP_CREDIT_RATE = 0.15;
-const FED_EI_CREDIT_RATE  = 0.15;
+// Federal non-refundable credits 2026
+const FED_BASIC_PERSONAL  = 16452.00; // TD1 federal 2026
+const FED_CPP_CREDIT_RATE = 0.14;
+const FED_EI_CREDIT_RATE  = 0.14;
 
 // Provincial 2025 brackets & BPA
 const PROV_TAX = {
@@ -231,7 +231,7 @@ function calcPayroll(
   statHrs   = 0,
   vacRate   = 0.04,
   payFreq   = "Semi-monthly",
-  td1Fed    = 16452,   // employee's federal TD1 claim 2025
+  td1Fed    = 16452,   // employee's federal TD1 claim 2026
   td1Prov   = null     // employee's provincial TD1 (null = use province BPA)
 ) {
   const PP       = PAY_PERIODS[payFreq] || 24;
@@ -262,12 +262,13 @@ function calcPayroll(
 
   // ── Step 2: CPP (T4127 Section A) ───────────────────────────────────────────
   // Annual CPP-pensionable earnings (gross × PP − basic exemption)
-  const annualPensionable = grossPeriod * PP;
+  // CPP on base earnings only (CRA excludes vacation pay from pensionable earnings)
+  const annualPensionable = baseEarnings * PP;
   const pensionableNet    = Math.max(annualPensionable - CPP_EXEMPTION, 0);
   const annualCPP         = Math.min(pensionableNet * CPP_RATE, CPP_MAX_CONTRIB);
   const periodCPP         = +(annualCPP / PP).toFixed(2);
 
-  // CPP2 (on earnings above the Year's Maximum Pensionable Earnings, 2025)
+  // CPP2 (on earnings above YMPE 2026 = $74,600)
   const annualCPP2 = annualPensionable > CPP2_THRESHOLD
     ? Math.min((annualPensionable - CPP2_THRESHOLD) * CPP2_RATE, CPP2_MAX)
     : 0;
@@ -276,19 +277,23 @@ function calcPayroll(
   const totalCPP = +(periodCPP + periodCPP2).toFixed(2);
 
   // ── Step 3: EI (T4127 Section B) ────────────────────────────────────────────
-  const annualEI  = Math.min(grossPeriod * PP * EI_RATE, EI_MAX_CONTRIB);
+  // EI on base earnings only (CRA excludes vacation pay from insurable earnings)
+  const annualEI  = Math.min(baseEarnings * PP * EI_RATE, EI_MAX_CONTRIB);
   const periodEI  = +(annualEI / PP).toFixed(2);
 
   // ── Step 4: Federal Tax (T4127 Section C — Method 1) ────────────────────────
   // Annualize
-  const annualGross = grossPeriod * PP;
+  // CRA taxes on base earnings only (not including vacation pay)
+  const annualGross = baseEarnings * PP;
 
-  const K1 = 0.15 * td1Fed;
-  const K2 = 0.15 * (annualCPP + annualCPP2);
-  const K3 = 0.15 * annualEI;
-  // K4 = Canada Employment Amount (CEA) 2025 = $1,433
+  // Canada Employment Amount (CEA) 2026 = $1,433
+  const CEA = Math.min(annualGross, 1433);
+  const K1 = 0.14 * td1Fed;
+  const K2 = 0.14 * (annualCPP + annualCPP2);
+  const K3 = 0.14 * annualEI;
+  const K4 = 0.14 * CEA;
   const T1 = calcBracketTax(annualGross, FED_BRACKETS);
-  const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3, 0);
+  const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
   const annualFedTax    = Math.round(annualFedTaxRaw);
   const periodFedTax    = +(annualFedTax / PP).toFixed(2);
 
@@ -765,7 +770,7 @@ useEffect(() => {
           email: form.email,
           hire_date: form.hireDate,
           position: form.position || "Employee",
-          td1_fed: parseFloat(form.td1Fed) || 15705,
+          td1_fed: parseFloat(form.td1Fed) || 16452,
           td1_prov: parseFloat(form.td1Prov) || null,
           vac_rate: (form.vacRate || "4") + "%",
           payroll_schedule: form.paySchedule || "Semi-monthly",
@@ -863,7 +868,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?e.rate:"", rate: e.type==="Hourly"?e.rate:"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||15705), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%","") }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?e.rate:"", rate: e.type==="Hourly"?e.rate:"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%","") }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -901,8 +906,8 @@ useEffect(() => {
             <option>Semi-monthly</option><option>Bi-weekly</option><option>Weekly</option><option>Monthly</option>
           </Select>
           <Input label="Vacation Pay %" type="number" value={form.vacRate} onChange={e=>setForm(p=>({...p,vacRate:e.target.value}))} placeholder="4" />
-          <Input label="Federal TD1 Claim ($)" type="number" value={form.td1Fed} onChange={e=>setForm(p=>({...p,td1Fed:e.target.value}))} placeholder="15705" />
-<Input label="Provincial TD1 Claim ($)" type="number" value={form.td1Prov} onChange={e=>setForm(p=>({...p,td1Prov:e.target.value}))} placeholder="Leave blank for province default" />
+          <Input label="Federal TD1 Claim ($)" type="number" value={form.td1Fed} onChange={e=>setForm(p=>({...p,td1Fed:e.target.value}))} placeholder="16452" />
+<Input label="Provincial TD1 Claim ($)" type="number" value={form.td1Prov} onChange={e=>setForm(p=>({...p,td1Prov:e.target.value}))} placeholder="12989 (ON default — leave blank to use province default)" />
           <Input label="Position / Job Title" placeholder="Software Developer" />
         </div>
         <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
