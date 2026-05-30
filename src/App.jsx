@@ -263,10 +263,12 @@ function calcPayroll(
   // ── Step 2: CPP (T4127 Section A) ───────────────────────────────────────────
   // Annual CPP-pensionable earnings (gross × PP − basic exemption)
   // CPP on gross including vacation pay (CRA includes vac pay in pensionable earnings)
+  // T4127 Chapter 6: CPP per-period exemption method (exact match to PDOC)
   const annualPensionable = grossPeriod * PP;
-  const pensionableNet    = Math.max(annualPensionable - CPP_EXEMPTION, 0);
-  const annualCPP         = Math.min(pensionableNet * CPP_RATE, CPP_MAX_CONTRIB);
-  const periodCPP         = +(annualCPP / PP).toFixed(2);
+  const periodExemption   = CPP_EXEMPTION / PP; // keep full precision, no rounding
+  const periodPensionable = Math.max(grossPeriod - periodExemption, 0);
+  const periodCPP         = +Math.min(periodPensionable * CPP_RATE, CPP_MAX_CONTRIB / PP).toFixed(2);
+  const annualCPP         = periodCPP * PP;
 
   // CPP2 (on earnings above YMPE 2026 = $74,600)
   const annualCPP2 = annualPensionable > CPP2_THRESHOLD
@@ -286,26 +288,26 @@ function calcPayroll(
   // CRA taxes on base earnings only (not including vacation pay)
   // CRA taxable income = annualized gross - CPP - EI (T4127 Method 1)
   const annualGross   = grossPeriod * PP;
-  // CRA taxable = gross - CPP only (EI is a credit, not deducted from taxable income)
-  const annualTaxable = annualGross - annualCPP - annualCPP2;
+  // T4127 Step 1: A = I × PP (no deductions — K2/K3 credits handle CPP/EI)
+  const annualTaxable = annualGross;
 
-  // Canada Employment Amount (CEA) 2026 = $1,433
-  // CRA T4127 Method 1 — credits against gross tax
-  // CEA 2026 = $1,433 (lesser of employment income or max)
+  // T4127 Step 2: CEA 2026 = lesser of employment income or $1,433
   const CEA = Math.min(annualGross, 1433);
-  // T1 = gross tax on annualized taxable income
+  // T4127 Step 3: T1 = T3 - K1 - K2 - K3 - K4
   const T1 = calcBracketTax(annualTaxable, FED_BRACKETS);
-  // Credits: TD1 claim + CPP + EI + CEA all at lowest federal rate 14%
-  const K1 = 0.14 * td1Fed;   // personal TD1 credit
-  const K4 = 0.14 * CEA;      // Canada Employment Amount credit
-  const annualFedTaxRaw = Math.max(T1 - K1 - K4, 0);
+  // T4127 Step 3 — exact formula: T1 = T3 - K1 - K2 - K3 - K4
+  const K1 = 0.14 * td1Fed;
+  const K2 = 0.14 * (annualCPP + annualCPP2);
+  const K3 = 0.14 * annualEI;
+  const K4 = 0.14 * Math.min(annualGross, 1433);
+  const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
   const annualFedTax    = Math.round(annualFedTaxRaw);
   const periodFedTax    = +(annualFedTax / PP).toFixed(2);
 
   // ── Step 5: Provincial Tax (T4127 Section D) ─────────────────────────────────
   const provBPA        = td1Prov ?? provData.bpa;
   const provLowestRate = provData.brackets[0]?.rate || 0.0505;
-  // Provincial credits: TD1 + CPP + EI at provincial lowest rate (CRA T4032)
+  // T4127 Step 5: KP = (provBPA + CPP + CPP2 + EI) × lowest prov rate
   const provCredits = (provBPA + annualCPP + annualCPP2 + annualEI) * provLowestRate;
 
   let annualProvTax = Math.max(calcBracketTax(annualTaxable, provData.brackets) - provCredits, 0);
