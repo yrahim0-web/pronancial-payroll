@@ -1088,7 +1088,10 @@ return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRa
               ))}
             </tr></thead>
             <tbody className="divide-y divide-gray-50">
-              {rows.map(e => (
+              {!selectedPeriod && (
+                <tr><td colSpan={13} className="text-center py-6 text-yellow-700 bg-yellow-50 text-sm font-medium">⚠️ Please select a pay period above to enter hours and process payroll.</td></tr>
+              )}
+              {selectedPeriod && rows.map(e => (
                 <tr key={e.id} className="hover:bg-gray-50">
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
@@ -1219,8 +1222,8 @@ return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRa
     }
   }
   setSaving(false);
-}} disabled={processed || saving} className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-sm font-medium transition-colors">
-              {processed ? "Payroll Processed ✓" : saving ? "Saving..." : "Process Payroll"}
+}} disabled={processed || saving || !selectedPeriod} className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-sm font-medium transition-colors">
+              {processed ? "Payroll Processed ✓" : saving ? "Saving..." : !selectedPeriod ? "Select Pay Period First" : "Process Payroll"}
             </button>
           </div>
         </Card>
@@ -1328,20 +1331,20 @@ function PaystubsPage({ company }) {
                 <button onClick={downloadPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 transition-colors"><Download size={13}/> PDF</button>
               </div>
             </div>
-            <div ref={paystubRef} className="border border-gray-200 rounded-2xl overflow-hidden">
-              <div className="bg-gray-50 px-5 py-3 flex items-center justify-between">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Statement of Earnings</p>
-                <p className="text-xs text-gray-400">Pay Period: Jun 1–15, 2025</p>
-              </div>
-              <div className="p-5 grid grid-cols-2 gap-6">
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">Employee</p>
-                  <p className="text-sm font-semibold text-gray-900">{selectedEmp.name}</p>
-                  <p className="text-xs text-gray-500">Employee</p>
-                  <p className="text-xs text-gray-500">{selectedEmp.province || company.province}</p>
+              <div ref={paystubRef} className="border border-gray-200 rounded-2xl overflow-hidden">
+                <div className="bg-gray-50 px-5 py-3 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Statement of Earnings</p>
+                  <p className="text-xs text-gray-400">Pay Period: {selectedRun?.period}</p>
                 </div>
-                <div>
-                  <p className="text-xs text-gray-400 mb-1">Pay Details</p>
+                <div className="p-5 grid grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1">Employee</p>
+                    <p className="text-sm font-semibold text-gray-900">{selectedEmp.name}</p>
+                    <p className="text-xs text-gray-500">Employee</p>
+                    <p className="text-xs text-gray-500">{selectedEmp.province || company.province}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 mb-1">Pay Details</p>
                   <p className="text-xs text-gray-600">Payment: {selectedRun.pay_date}</p>
                   <p className="text-xs text-gray-600">Frequency: {selectedEmp?.payroll_schedule || company?.payroll_schedule || "Biweekly"}</p>
                   <p className="text-xs text-gray-600">Pay Period: {selectedRun.period}</p>
