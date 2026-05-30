@@ -935,8 +935,38 @@ useEffect(() => {
 }
 
 // ─── Run Payroll ──────────────────────────────────────────────────────────────
+const BIWEEKLY_PERIODS = [
+  { period: 1,  start: "Jan 5, 2026",  end: "Jan 18, 2026",  payDate: "Jan 19, 2026" },
+  { period: 2,  start: "Jan 19, 2026", end: "Feb 1, 2026",   payDate: "Feb 2, 2026" },
+  { period: 3,  start: "Feb 2, 2026",  end: "Feb 15, 2026",  payDate: "Feb 16, 2026" },
+  { period: 4,  start: "Feb 16, 2026", end: "Mar 1, 2026",   payDate: "Mar 2, 2026" },
+  { period: 5,  start: "Mar 2, 2026",  end: "Mar 15, 2026",  payDate: "Mar 16, 2026" },
+  { period: 6,  start: "Mar 16, 2026", end: "Mar 29, 2026",  payDate: "Mar 30, 2026" },
+  { period: 7,  start: "Mar 30, 2026", end: "Apr 12, 2026",  payDate: "Apr 13, 2026" },
+  { period: 8,  start: "Apr 13, 2026", end: "Apr 26, 2026",  payDate: "Apr 27, 2026" },
+  { period: 9,  start: "Apr 27, 2026", end: "May 10, 2026",  payDate: "May 11, 2026" },
+  { period: 10, start: "May 11, 2026", end: "May 24, 2026",  payDate: "May 25, 2026" },
+  { period: 11, start: "May 25, 2026", end: "Jun 7, 2026",   payDate: "Jun 8, 2026" },
+  { period: 12, start: "Jun 8, 2026",  end: "Jun 21, 2026",  payDate: "Jun 22, 2026" },
+  { period: 13, start: "Jun 22, 2026", end: "Jul 5, 2026",   payDate: "Jul 6, 2026" },
+  { period: 14, start: "Jul 6, 2026",  end: "Jul 19, 2026",  payDate: "Jul 20, 2026" },
+  { period: 15, start: "Jul 20, 2026", end: "Aug 2, 2026",   payDate: "Aug 3, 2026" },
+  { period: 16, start: "Aug 3, 2026",  end: "Aug 16, 2026",  payDate: "Aug 17, 2026" },
+  { period: 17, start: "Aug 17, 2026", end: "Aug 30, 2026",  payDate: "Aug 31, 2026" },
+  { period: 18, start: "Aug 31, 2026", end: "Sep 13, 2026",  payDate: "Sep 14, 2026" },
+  { period: 19, start: "Sep 14, 2026", end: "Sep 27, 2026",  payDate: "Sep 28, 2026" },
+  { period: 20, start: "Sep 28, 2026", end: "Oct 11, 2026",  payDate: "Oct 12, 2026" },
+  { period: 21, start: "Oct 12, 2026", end: "Oct 25, 2026",  payDate: "Oct 26, 2026" },
+  { period: 22, start: "Oct 26, 2026", end: "Nov 8, 2026",   payDate: "Nov 9, 2026" },
+  { period: 23, start: "Nov 9, 2026",  end: "Nov 22, 2026",  payDate: "Nov 23, 2026" },
+  { period: 24, start: "Nov 23, 2026", end: "Dec 6, 2026",   payDate: "Dec 7, 2026" },
+  { period: 25, start: "Dec 7, 2026",  end: "Dec 20, 2026",  payDate: "Dec 21, 2026" },
+  { period: 26, start: "Dec 21, 2026", end: "Jan 3, 2027",   payDate: "Jan 4, 2027" },
+];
+
 function RunPayrollPage({ company, setPage }) {
   const [emps, setEmps] = useState([]);
+  const [selectedPeriod, setSelectedPeriod] = useState(null);
 
   useEffect(() => {
     const fetchEmps = async () => {
@@ -997,8 +1027,23 @@ const [showPreview, setShowPreview] = useState(false);
       )}
       <Card>
         <div className="p-4 border-b border-gray-50 flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-700"><Calendar size={14} className="text-gray-400" />Pay Period: <span className="text-blue-600">{period}</span></div>
-          <Badge color="blue">Semi-monthly</Badge>
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700"><Calendar size={14} className="text-gray-400" />Pay Period:</div>
+          <select
+            className="text-sm border border-gray-200 rounded-lg px-2 py-1 text-blue-600 font-medium focus:outline-none focus:ring-2 focus:ring-blue-300"
+            value={selectedPeriod || ""}
+            onChange={e => setSelectedPeriod(e.target.value)}
+          >
+            <option value="">-- Select Period --</option>
+            {BIWEEKLY_PERIODS.map(p => (
+              <option key={p.period} value={p.period}>
+                Period {p.period}: {p.start} – {p.end}
+              </option>
+            ))}
+          </select>
+          {selectedPeriod && (
+            <span className="text-xs text-gray-500">Pay Date: <span className="text-green-600 font-medium">{BIWEEKLY_PERIODS[+selectedPeriod-1]?.payDate}</span></span>
+          )}
+          <Badge color="blue">Biweekly</Badge>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -1157,16 +1202,38 @@ function PaystubsPage({ company }) {
   const paystubRef = useRef(null);
 
   const downloadPDF = async () => {
-    if (!paystubRef.current) return;
+    if (!selectedEmp || !selectedRun) return;
     const { default: jsPDF } = await import('jspdf');
-    const { default: html2canvas } = await import('html2canvas');
-    const canvas = await html2canvas(paystubRef.current, { scale: 2, useCORS: true });
-    const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(`paystub-${selectedEmp?.name?.replace(/ /g,'-')}-${selectedRun?.pay_date}.pdf`);
+    let y = 20;
+    pdf.setFontSize(16); pdf.setFont('helvetica', 'bold');
+    pdf.text(company.name || 'Company', 15, y); y += 7;
+    pdf.setFontSize(9); pdf.setFont('helvetica', 'normal');
+    pdf.text('Pay Period: ' + selectedRun.period + '   Date: ' + selectedRun.pay_date, 15, y); y += 10;
+    pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
+    pdf.text('Employee: ' + (selectedEmp.name || ''), 15, y); y += 6;
+    pdf.text('Province: ' + (selectedEmp.province || ''), 15, y); y += 10;
+    pdf.setFillColor(240,240,240);
+    pdf.rect(15, y-4, 180, 7, 'F');
+    pdf.setFontSize(9);
+    pdf.text('Description', 17, y);
+    pdf.text('Current', 130, y);
+    pdf.text('YTD', 168, y); y += 8;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Base Earnings', 17, y); pdf.text(String((+selectedEmp.base_earnings||0).toFixed(2)), 130, y); pdf.text('--', 168, y); y += 6;
+    pdf.text('Vacation Pay', 17, y); pdf.text(String((+selectedEmp.vac_pay||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_vac||0).toFixed(2)), 168, y); y += 6;
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Gross Earnings', 17, y); pdf.text(String((+selectedEmp.gross||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_gross||0).toFixed(2)), 168, y); y += 10;
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('CPP', 17, y); pdf.text(String((+selectedEmp.cpp||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_cpp||0).toFixed(2)), 168, y); y += 6;
+    pdf.text('EI', 17, y); pdf.text(String((+selectedEmp.ei||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_ei||0).toFixed(2)), 168, y); y += 6;
+    pdf.text('Federal Tax', 17, y); pdf.text(String((+selectedEmp.fed_tax||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_fed_tax||0).toFixed(2)), 168, y); y += 6;
+    pdf.text('Provincial Tax', 17, y); pdf.text(String((+selectedEmp.prov_tax||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_prov_tax||0).toFixed(2)), 168, y); y += 10;
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Net Pay', 17, y); pdf.text('$' + String((+selectedEmp.net||0).toFixed(2)), 130, y); y += 10;
+    pdf.setFont('helvetica', 'italic'); pdf.setFontSize(8);
+    pdf.text('This is a computer-generated pay statement.', 15, y);
+    pdf.save('paystub-' + (selectedEmp.name||'emp').replace(/ /g,'-') + '-' + selectedRun.pay_date + '.pdf');
   };
 
   useEffect(() => {
@@ -1223,10 +1290,10 @@ function PaystubsPage({ company }) {
               <div className="flex gap-2">
                 <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 transition-colors"><Printer size={13}/> Print</button>
                 <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 transition-colors"><Send size={13}/> Email</button>
-                <button className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 transition-colors"><Download size={13}/> PDF</button>
+                <button onClick={downloadPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 transition-colors"><Download size={13}/> PDF</button>
               </div>
             </div>
-            <div className="border border-gray-200 rounded-2xl overflow-hidden">
+            <div ref={paystubRef} className="border border-gray-200 rounded-2xl overflow-hidden">
               <div className="bg-gray-50 px-5 py-3 flex items-center justify-between">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Statement of Earnings</p>
                 <p className="text-xs text-gray-400">Pay Period: Jun 1–15, 2025</p>
@@ -1241,7 +1308,7 @@ function PaystubsPage({ company }) {
                 <div>
                   <p className="text-xs text-gray-400 mb-1">Pay Details</p>
                   <p className="text-xs text-gray-600">Payment: {selectedRun.pay_date}</p>
-                  <p className="text-xs text-gray-600">Frequency: Semi-monthly</p>
+                  <p className="text-xs text-gray-600">Frequency: {selectedEmp?.payroll_schedule || company?.payroll_schedule || "Biweekly"}</p>
                   <p className="text-xs text-gray-600">Pay Period: {selectedRun.period}</p>
                   <p className="text-xs text-gray-600">Direct Deposit</p>
                 </div>
