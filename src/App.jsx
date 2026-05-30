@@ -1243,35 +1243,119 @@ function PaystubsPage({ company }) {
     if (!selectedEmp || !selectedRun) return;
     const { default: jsPDF } = await import('jspdf');
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    let y = 20;
+    const W = 210; let y = 0;
+
+    // ── Header bar ──────────────────────────────────────────────────────────
+    pdf.setFillColor(30, 64, 175); // PRIMARY: blue
+    pdf.rect(0, 0, W, 28, 'F');
+    pdf.setTextColor(255,255,255);
     pdf.setFontSize(16); pdf.setFont('helvetica', 'bold');
-    pdf.text(company.name || 'Company', 15, y); y += 7;
-    pdf.setFontSize(9); pdf.setFont('helvetica', 'normal');
-    pdf.text('Pay Period: ' + selectedRun.period + '   Date: ' + selectedRun.pay_date, 15, y); y += 10;
-    pdf.setFontSize(10); pdf.setFont('helvetica', 'bold');
-    pdf.text('Employee: ' + (selectedEmp.name || ''), 15, y); y += 6;
-    pdf.text('Province: ' + (selectedEmp.province || ''), 15, y); y += 10;
-    pdf.setFillColor(240,240,240);
-    pdf.rect(15, y-4, 180, 7, 'F');
-    pdf.setFontSize(9);
-    pdf.text('Description', 17, y);
-    pdf.text('Current', 130, y);
-    pdf.text('YTD', 168, y); y += 8;
-    pdf.setFont('helvetica', 'normal');
-    pdf.text('Base Earnings', 17, y); pdf.text(String((+selectedEmp.base_earnings||0).toFixed(2)), 130, y); pdf.text('--', 168, y); y += 6;
-    pdf.text('Vacation Pay', 17, y); pdf.text(String((+selectedEmp.vac_pay||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_vac||0).toFixed(2)), 168, y); y += 6;
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Gross Earnings', 17, y); pdf.text(String((+selectedEmp.gross||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_gross||0).toFixed(2)), 168, y); y += 10;
-    pdf.setFont('helvetica', 'normal');
-    pdf.text('CPP', 17, y); pdf.text(String((+selectedEmp.cpp||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_cpp||0).toFixed(2)), 168, y); y += 6;
-    pdf.text('EI', 17, y); pdf.text(String((+selectedEmp.ei||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_ei||0).toFixed(2)), 168, y); y += 6;
-    pdf.text('Federal Tax', 17, y); pdf.text(String((+selectedEmp.fed_tax||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_fed_tax||0).toFixed(2)), 168, y); y += 6;
-    pdf.text('Provincial Tax', 17, y); pdf.text(String((+selectedEmp.prov_tax||0).toFixed(2)), 130, y); pdf.text(String((+selectedEmp.ytd_prov_tax||0).toFixed(2)), 168, y); y += 10;
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Net Pay', 17, y); pdf.text('$' + String((+selectedEmp.net||0).toFixed(2)), 130, y); y += 10;
-    pdf.setFont('helvetica', 'italic'); pdf.setFontSize(8);
-    pdf.text('This is a computer-generated pay statement.', 15, y);
-    pdf.save('paystub-' + (selectedEmp.name||'emp').replace(/ /g,'-') + '-' + selectedRun.pay_date + '.pdf');
+    pdf.text(company.name || 'Company', 15, 12);
+    pdf.setFontSize(8); pdf.setFont('helvetica', 'normal');
+    pdf.text('BN: ' + (company.bn||'—') + '   Province: ' + (company.province||'—'), 15, 19);
+    pdf.text('STATEMENT OF EARNINGS', 130, 12);
+    pdf.text('Pay Period: ' + (selectedRun.period||'—'), 130, 19);
+    pdf.text('Pay Date: ' + (selectedRun.pay_date||'—'), 130, 25);
+    pdf.setTextColor(0,0,0); y = 36;
+
+    // ── Employee info box ────────────────────────────────────────────────────
+    pdf.setFillColor(241,245,249);
+    pdf.rect(15, y-4, 85, 24, 'F');
+    pdf.rect(105, y-4, 90, 24, 'F');
+    pdf.setFontSize(7); pdf.setTextColor(100,100,100);
+    pdf.text('EMPLOYEE', 18, y); pdf.text('PAY DETAILS', 108, y); y += 5;
+    pdf.setFontSize(9); pdf.setTextColor(0,0,0); pdf.setFont('helvetica','bold');
+    pdf.text(selectedEmp.name||'—', 18, y); y += 5;
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(8);
+    pdf.text('Province: ' + (selectedEmp.province||company.province||'—'), 18, y);
+    pdf.text('Frequency: ' + (selectedEmp.payroll_schedule||'Bi-weekly'), 108, y-5);
+    pdf.text('Payment Method: Direct Deposit', 108, y); y += 5;
+    pdf.text('SIN: ***-***-' + (selectedEmp.sin||'000').slice(-3), 18, y);
+    y += 14;
+
+    // ── Table header ─────────────────────────────────────────────────────────
+    pdf.setFillColor(30,64,175);
+    pdf.rect(15, y-5, 180, 8, 'F');
+    pdf.setTextColor(255,255,255); pdf.setFontSize(8); pdf.setFont('helvetica','bold');
+    pdf.text('DESCRIPTION', 18, y);
+    pdf.text('HOURS', 90, y);
+    pdf.text('CURRENT ($)', 120, y);
+    pdf.text('YTD ($)', 165, y);
+    pdf.setTextColor(0,0,0); y += 6;
+
+    // ── Earnings section ─────────────────────────────────────────────────────
+    pdf.setFillColor(220,252,231); pdf.rect(15, y-4, 180, 6, 'F');
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(8); pdf.setTextColor(21,128,61);
+    pdf.text('EARNINGS', 18, y); pdf.setTextColor(0,0,0); y += 6;
+
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(8);
+    const hrs = selectedEmp.reg_hrs||'0';
+    pdf.text('Base Earnings', 18, y);
+    pdf.text(String(hrs), 90, y);
+    pdf.text(String((+selectedEmp.base_earnings||0).toFixed(2)), 120, y);
+    pdf.text('—', 165, y); y += 5;
+    pdf.text('Vacation Pay (4%)', 18, y);
+    pdf.text(String((+selectedEmp.vac_pay||0).toFixed(2)), 120, y);
+    pdf.text(String((+selectedEmp.ytd_vac||0).toFixed(2)), 165, y); y += 5;
+
+    pdf.setFillColor(219,234,254); pdf.rect(15, y-4, 180, 7, 'F');
+    pdf.setFont('helvetica','bold');
+    pdf.text('GROSS EARNINGS', 18, y);
+    pdf.text(String((+selectedEmp.gross||0).toFixed(2)), 120, y);
+    pdf.text(String((+selectedEmp.ytd_gross||0).toFixed(2)), 165, y); y += 10;
+
+    // ── Employee Deductions ──────────────────────────────────────────────────
+    pdf.setFillColor(241,245,249); pdf.rect(15, y-4, 180, 6, 'F');
+    pdf.setFont('helvetica','bold'); pdf.setTextColor(30,64,175);
+    pdf.text('EMPLOYEE DEDUCTIONS', 18, y); pdf.setTextColor(0,0,0); y += 6;
+
+    pdf.setFont('helvetica','normal');
+    const deds = [
+      ['CPP Contributions', (+selectedEmp.cpp||0).toFixed(2), (+selectedEmp.ytd_cpp||0).toFixed(2)],
+      ['EI Premiums', (+selectedEmp.ei||0).toFixed(2), (+selectedEmp.ytd_ei||0).toFixed(2)],
+      ['Federal Income Tax', (+selectedEmp.fed_tax||0).toFixed(2), (+selectedEmp.ytd_fed_tax||0).toFixed(2)],
+      ['Provincial Income Tax', (+selectedEmp.prov_tax||0).toFixed(2), (+selectedEmp.ytd_prov_tax||0).toFixed(2)],
+    ];
+    deds.forEach(([label, cur, ytd]) => {
+      pdf.text(label, 18, y);
+      pdf.setTextColor(30,64,175);
+      pdf.text('(' + cur + ')', 120, y);
+      pdf.text('(' + ytd + ')', 165, y);
+      pdf.setTextColor(0,0,0); y += 5;
+    });
+
+    // ── Net Pay ──────────────────────────────────────────────────────────────
+    pdf.setFillColor(30,64,175); pdf.rect(15, y-4, 180, 8, 'F');
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(10);
+    pdf.setTextColor(255,255,255);
+    pdf.text('NET PAY', 18, y);
+    pdf.text('$' + (+selectedEmp.net||0).toFixed(2), 120, y);
+    const ytdNet = ((+selectedEmp.ytd_gross||0)-(+selectedEmp.ytd_cpp||0)-(+selectedEmp.ytd_ei||0)-(+selectedEmp.ytd_fed_tax||0)-(+selectedEmp.ytd_prov_tax||0));
+    pdf.text('$' + ytdNet.toFixed(2), 165, y);
+    pdf.setTextColor(0,0,0); y += 12;
+    pdf.setTextColor(0,0,0);
+
+    // ── Employer Contributions ───────────────────────────────────────────────
+    pdf.setFillColor(241,245,249); pdf.rect(15, y-4, 180, 6, 'F');
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(8); pdf.setTextColor(30,64,175);
+    pdf.text('EMPLOYER CONTRIBUTIONS', 18, y); pdf.setTextColor(0,0,0); y += 6;
+    pdf.setFont('helvetica','normal');
+    pdf.text('Employer CPP (matched)', 18, y);
+    pdf.setTextColor(30,64,175);
+    pdf.text((+selectedEmp.er_cpp||0).toFixed(2), 120, y);
+    pdf.setTextColor(0,0,0); y += 5;
+    pdf.text('Employer EI (×1.4)', 18, y);
+    pdf.setTextColor(30,64,175);
+    pdf.text((+selectedEmp.er_ei||0).toFixed(2), 120, y);
+    pdf.setTextColor(0,0,0); y += 12;
+
+    // ── Footer ───────────────────────────────────────────────────────────────
+    pdf.setFillColor(30,64,175); pdf.rect(0, 282, W, 15, 'F');
+    pdf.setTextColor(255,255,255); pdf.setFontSize(7); pdf.setFont('helvetica','italic');
+    pdf.text('This is a computer-generated statement. Vacation pay is paid each period per CRA guidelines.', 15, 289);
+    pdf.text('Pronancial Payroll System', 160, 289);
+
+    pdf.save('paystub-' + (selectedEmp.name||'emp').replace(/ /g,'-') + '-' + (selectedRun.pay_date||'') + '.pdf');
   };
 
   useEffect(() => {
