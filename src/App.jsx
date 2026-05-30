@@ -305,9 +305,8 @@ function calcPayroll(
   // ── Step 5: Provincial Tax (T4127 Section D) ─────────────────────────────────
   const provBPA        = td1Prov ?? provData.bpa;
   const provLowestRate = provData.brackets[0]?.rate || 0.0505;
-  // Provincial credits: TD1 claim × provincial lowest rate
-  // Provincial credits: only personal TD1 amount at provincial lowest rate
-  const provCredits = provBPA * provLowestRate;
+  // Provincial credits: TD1 + CPP + EI at provincial lowest rate (CRA T4032)
+  const provCredits = (provBPA + annualCPP + annualCPP2 + annualEI) * provLowestRate;
 
   let annualProvTax = Math.max(calcBracketTax(annualTaxable, provData.brackets) - provCredits, 0);
 
