@@ -262,8 +262,8 @@ function calcPayroll(
 
   // ── Step 2: CPP (T4127 Section A) ───────────────────────────────────────────
   // Annual CPP-pensionable earnings (gross × PP − basic exemption)
-  // CPP on base earnings only (CRA excludes vacation pay from pensionable earnings)
-  const annualPensionable = baseEarnings * PP;
+  // CPP on gross including vacation pay (CRA includes vac pay in pensionable earnings)
+  const annualPensionable = grossPeriod * PP;
   const pensionableNet    = Math.max(annualPensionable - CPP_EXEMPTION, 0);
   const annualCPP         = Math.min(pensionableNet * CPP_RATE, CPP_MAX_CONTRIB);
   const periodCPP         = +(annualCPP / PP).toFixed(2);
@@ -277,25 +277,28 @@ function calcPayroll(
   const totalCPP = +(periodCPP + periodCPP2).toFixed(2);
 
   // ── Step 3: EI (T4127 Section B) ────────────────────────────────────────────
-  // EI on base earnings only (CRA excludes vacation pay from insurable earnings)
-  const annualEI  = Math.min(baseEarnings * PP * EI_RATE, EI_MAX_CONTRIB);
+  // EI on gross including vacation pay (CRA includes vac pay in insurable earnings)
+  const annualEI  = Math.min(grossPeriod * PP * EI_RATE, EI_MAX_CONTRIB);
   const periodEI  = +(annualEI / PP).toFixed(2);
 
   // ── Step 4: Federal Tax (T4127 Section C — Method 1) ────────────────────────
   // Annualize
   // CRA taxes on base earnings only (not including vacation pay)
   // CRA taxable income = annualized gross - CPP - EI (T4127 Method 1)
-  const annualGross   = baseEarnings * PP;
-  const annualTaxable = annualGross - annualCPP - annualCPP2 - annualEI;
+  const annualGross   = grossPeriod * PP;
+  // CRA taxable = gross - CPP only (EI is a credit, not deducted from taxable income)
+  const annualTaxable = annualGross - annualCPP - annualCPP2;
 
   // Canada Employment Amount (CEA) 2026 = $1,433
+  // CRA T4127 Method 1 — credits against gross tax
+  // CEA 2026 = $1,433 (lesser of employment income or max)
   const CEA = Math.min(annualGross, 1433);
-  const K1 = 0.14 * td1Fed;
-  const K2 = 0.14 * (annualCPP + annualCPP2);
-  const K3 = 0.14 * annualEI;
-  const K4 = 0.14 * CEA;
+  // T1 = gross tax on annualized taxable income
   const T1 = calcBracketTax(annualTaxable, FED_BRACKETS);
-  const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
+  // Credits: TD1 claim + CPP + EI + CEA all at lowest federal rate 14%
+  const K1 = 0.14 * td1Fed;   // personal TD1 credit
+  const K4 = 0.14 * CEA;      // Canada Employment Amount credit
+  const annualFedTaxRaw = Math.max(T1 - K1 - K4, 0);
   const annualFedTax    = Math.round(annualFedTaxRaw);
   const periodFedTax    = +(annualFedTax / PP).toFixed(2);
 
@@ -303,17 +306,33 @@ function calcPayroll(
   const provBPA        = td1Prov ?? provData.bpa;
   const provLowestRate = provData.brackets[0]?.rate || 0.0505;
   // Provincial credits: TD1 claim × provincial lowest rate
-  // CPP/EI credits also use provincial lowest rate (CRA T4032 method)
-  const provTD1Credit  = provBPA * provLowestRate;
-  const provCPPCredit  = (annualCPP + annualCPP2) * provLowestRate;
-  const provEICredit   = annualEI * provLowestRate;
-  const provCredits    = provTD1Credit + provCPPCredit + provEICredit;
+  // Provincial credits: only personal TD1 amount at provincial lowest rate
+  const provCredits = provBPA * provLowestRate;
 
   let annualProvTax = Math.max(calcBracketTax(annualTaxable, provData.brackets) - provCredits, 0);
 
   // Ontario surtax
   if (provData.surtax) {
     annualProvTax += calcONSurtax(annualProvTax);
+  }
+
+  // Ontario health premium 2026 (included in provincial tax per CRA T4032)
+  if (province === "ON") {
+    let ohp = 0;
+    const ai = annualTaxable;
+    if      (ai <= 20000)  ohp = 0;
+    else if (ai <= 36000)  ohp = Math.min(300,  0.06  * (ai - 20000));
+    else if (ai <= 48000)  ohp = Math.min(450,  300 + 0.06 * (ai - 36000));
+    else if (ai <= 72000)  ohp = Math.min(600,  450 + 0.25 * (ai - 48000));
+    else if (ai <= 200000) ohp = Math.min(750,  600 + 0.25 * (ai - 72000));
+    else                   ohp = Math.min(900,  750 + 0.25 * (ai - 200000));
+    annualProvTax += ohp;
+  }
+
+  // Ontario tax reduction 2026 — only applies if annual income under ~$21,000
+  if (province === "ON" && annualTaxable < 21000) {
+    const onTaxReduction = Math.max(0, Math.min(274, 274 - 0.05 * Math.max(0, annualTaxable - 16291)));
+    annualProvTax = Math.max(0, annualProvTax - onTaxReduction);
   }
 
   const annualProvTaxRounded = Math.round(annualProvTax);
