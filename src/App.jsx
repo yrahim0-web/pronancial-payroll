@@ -97,11 +97,11 @@ const FED_EI_CREDIT_RATE  = 0.14;
 const PROV_TAX = {
   ON: {
     brackets: [
-      { min: 0,      max: 51446,   rate: 0.0505, base: 0        },
-      { min: 51446,  max: 102894,  rate: 0.0915, base: 2598.02  },
-      { min: 102894, max: 150000,  rate: 0.1116, base: 7306.11  },
-      { min: 150000, max: 220000,  rate: 0.1216, base: 12559.47 },
-      { min: 220000, max: Infinity,rate: 0.1316, base: 24079.47 },
+      { min: 0,      max: 52886,   rate: 0.0505, base: 0        },
+      { min: 52886,  max: 105775,  rate: 0.0915, base: 2670.74  },
+      { min: 105775, max: 150000,  rate: 0.1116, base: 7514.86  },
+      { min: 150000, max: 220000,  rate: 0.1216, base: 12447.72 },
+      { min: 220000, max: Infinity,rate: 0.1316, base: 23967.72 },
     ],
     bpa: 12989,
     surtax: true,
@@ -217,8 +217,8 @@ function calcBracketTax(annualIncome, brackets) {
 // ─── Ontario Surtax (2025) ────────────────────────────────────────────────────
 function calcONSurtax(basicProvTax) {
   let surtax = 0;
-  if (basicProvTax > 5315) surtax += (basicProvTax - 5315) * 0.20;
-  if (basicProvTax > 6802) surtax += (basicProvTax - 6802) * 0.36;
+  if (basicProvTax > 5765) surtax += (basicProvTax - 5765) * 0.20;
+  if (basicProvTax > 7387) surtax += (basicProvTax - 7387) * 0.36;
   return surtax;
 }
 
@@ -300,7 +300,12 @@ function calcPayroll(
   // ── Step 5: Provincial Tax (T4127 Section D) ─────────────────────────────────
   const provBPA        = td1Prov ?? provData.bpa;
   const provLowestRate = provData.brackets[0]?.rate || 0.0505;
-  const provCredits    = (provBPA + annualCPP + annualCPP2 + annualEI) * provLowestRate;
+  // Provincial credits: TD1 claim × provincial lowest rate
+  // CPP/EI credits also use provincial lowest rate (CRA T4032 method)
+  const provTD1Credit  = provBPA * provLowestRate;
+  const provCPPCredit  = (annualCPP + annualCPP2) * provLowestRate;
+  const provEICredit   = annualEI * provLowestRate;
+  const provCredits    = provTD1Credit + provCPPCredit + provEICredit;
 
   let annualProvTax = Math.max(calcBracketTax(annualGross, provData.brackets) - provCredits, 0);
 
@@ -771,7 +776,7 @@ useEffect(() => {
           hire_date: form.hireDate,
           position: form.position || "Employee",
           td1_fed: parseFloat(form.td1Fed) || 16452,
-          td1_prov: parseFloat(form.td1Prov) || null,
+          td1_prov: parseFloat(form.td1Prov) || 12989,
           vac_rate: (form.vacRate || "4") + "%",
           payroll_schedule: form.paySchedule || "Semi-monthly",
         })
@@ -868,7 +873,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?e.rate:"", rate: e.type==="Hourly"?e.rate:"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%","") }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?e.rate:"", rate: e.type==="Hourly"?e.rate:"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||12989), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%","") }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -907,7 +912,7 @@ useEffect(() => {
           </Select>
           <Input label="Vacation Pay %" type="number" value={form.vacRate} onChange={e=>setForm(p=>({...p,vacRate:e.target.value}))} placeholder="4" />
           <Input label="Federal TD1 Claim ($)" type="number" value={form.td1Fed} onChange={e=>setForm(p=>({...p,td1Fed:e.target.value}))} placeholder="16452" />
-<Input label="Provincial TD1 Claim ($)" type="number" value={form.td1Prov} onChange={e=>setForm(p=>({...p,td1Prov:e.target.value}))} placeholder="12989 (ON default — leave blank to use province default)" />
+<Input label="Provincial TD1 Claim ($)" type="number" value={form.td1Prov} onChange={e=>setForm(p=>({...p,td1Prov:e.target.value}))} placeholder="12989" />
           <Input label="Position / Job Title" placeholder="Software Developer" />
         </div>
         <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
@@ -1005,7 +1010,10 @@ const [showPreview, setShowPreview] = useState(false);
     const defaultReg = e.type === "Salary" ? "80" : "0";
     const defaultVac = (e.vac_rate || "4%").replace("%","");
     const h = hours[e.id] || { reg: defaultReg, ot:"0", stat:"0", bonus:"0", vacRate: defaultVac + "%" };
-    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04, "Semi-monthly", e.td1_fed || 16452, e.td1_prov || null), ...h };
+    const fedTD1 = (!e.td1_fed || e.td1_fed === 15705) ? 16452 : e.td1_fed;
+const provTD1 = (!e.td1_prov || e.td1_prov === 0) ? 12989 : e.td1_prov;
+const empFreq = e.payroll_schedule || "Bi-weekly";
+return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04, empFreq, fedTD1, provTD1), ...h };
   });
 
   const totals = rows.reduce((a, r) => ({
