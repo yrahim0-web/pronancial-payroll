@@ -966,6 +966,111 @@ useEffect(() => {
   );
 }
 
+// ─── Pay Period Calendars 2026 ────────────────────────────────────────────────
+const WEEKLY_PERIODS = [
+  {period:1,start:"Jan 1, 2026",end:"Jan 4, 2026",payDate:"Jan 5, 2026"},
+  {period:2,start:"Jan 5, 2026",end:"Jan 11, 2026",payDate:"Jan 12, 2026"},
+  {period:3,start:"Jan 12, 2026",end:"Jan 18, 2026",payDate:"Jan 19, 2026"},
+  {period:4,start:"Jan 19, 2026",end:"Jan 25, 2026",payDate:"Jan 26, 2026"},
+  {period:5,start:"Jan 26, 2026",end:"Feb 1, 2026",payDate:"Feb 2, 2026"},
+  {period:6,start:"Feb 2, 2026",end:"Feb 8, 2026",payDate:"Feb 9, 2026"},
+  {period:7,start:"Feb 9, 2026",end:"Feb 15, 2026",payDate:"Feb 16, 2026"},
+  {period:8,start:"Feb 16, 2026",end:"Feb 22, 2026",payDate:"Feb 23, 2026"},
+  {period:9,start:"Feb 23, 2026",end:"Mar 1, 2026",payDate:"Mar 2, 2026"},
+  {period:10,start:"Mar 2, 2026",end:"Mar 8, 2026",payDate:"Mar 9, 2026"},
+  {period:11,start:"Mar 9, 2026",end:"Mar 15, 2026",payDate:"Mar 16, 2026"},
+  {period:12,start:"Mar 16, 2026",end:"Mar 22, 2026",payDate:"Mar 23, 2026"},
+  {period:13,start:"Mar 23, 2026",end:"Mar 29, 2026",payDate:"Mar 30, 2026"},
+  {period:14,start:"Mar 30, 2026",end:"Apr 5, 2026",payDate:"Apr 6, 2026"},
+  {period:15,start:"Apr 6, 2026",end:"Apr 12, 2026",payDate:"Apr 13, 2026"},
+  {period:16,start:"Apr 13, 2026",end:"Apr 19, 2026",payDate:"Apr 20, 2026"},
+  {period:17,start:"Apr 20, 2026",end:"Apr 26, 2026",payDate:"Apr 27, 2026"},
+  {period:18,start:"Apr 27, 2026",end:"May 3, 2026",payDate:"May 4, 2026"},
+  {period:19,start:"May 4, 2026",end:"May 10, 2026",payDate:"May 11, 2026"},
+  {period:20,start:"May 11, 2026",end:"May 17, 2026",payDate:"May 18, 2026"},
+  {period:21,start:"May 18, 2026",end:"May 24, 2026",payDate:"May 25, 2026"},
+  {period:22,start:"May 25, 2026",end:"May 31, 2026",payDate:"Jun 1, 2026"},
+  {period:23,start:"Jun 1, 2026",end:"Jun 7, 2026",payDate:"Jun 8, 2026"},
+  {period:24,start:"Jun 8, 2026",end:"Jun 14, 2026",payDate:"Jun 15, 2026"},
+  {period:25,start:"Jun 15, 2026",end:"Jun 21, 2026",payDate:"Jun 22, 2026"},
+  {period:26,start:"Jun 22, 2026",end:"Jun 28, 2026",payDate:"Jun 29, 2026"},
+  {period:27,start:"Jun 29, 2026",end:"Jul 5, 2026",payDate:"Jul 6, 2026"},
+  {period:28,start:"Jul 6, 2026",end:"Jul 12, 2026",payDate:"Jul 13, 2026"},
+  {period:29,start:"Jul 13, 2026",end:"Jul 19, 2026",payDate:"Jul 20, 2026"},
+  {period:30,start:"Jul 20, 2026",end:"Jul 26, 2026",payDate:"Jul 27, 2026"},
+  {period:31,start:"Jul 27, 2026",end:"Aug 2, 2026",payDate:"Aug 3, 2026"},
+  {period:32,start:"Aug 3, 2026",end:"Aug 9, 2026",payDate:"Aug 10, 2026"},
+  {period:33,start:"Aug 10, 2026",end:"Aug 16, 2026",payDate:"Aug 17, 2026"},
+  {period:34,start:"Aug 17, 2026",end:"Aug 23, 2026",payDate:"Aug 24, 2026"},
+  {period:35,start:"Aug 24, 2026",end:"Aug 30, 2026",payDate:"Aug 31, 2026"},
+  {period:36,start:"Aug 31, 2026",end:"Sep 6, 2026",payDate:"Sep 7, 2026"},
+  {period:37,start:"Sep 7, 2026",end:"Sep 13, 2026",payDate:"Sep 14, 2026"},
+  {period:38,start:"Sep 14, 2026",end:"Sep 20, 2026",payDate:"Sep 21, 2026"},
+  {period:39,start:"Sep 21, 2026",end:"Sep 27, 2026",payDate:"Sep 28, 2026"},
+  {period:40,start:"Sep 28, 2026",end:"Oct 4, 2026",payDate:"Oct 5, 2026"},
+  {period:41,start:"Oct 5, 2026",end:"Oct 11, 2026",payDate:"Oct 12, 2026"},
+  {period:42,start:"Oct 12, 2026",end:"Oct 18, 2026",payDate:"Oct 19, 2026"},
+  {period:43,start:"Oct 19, 2026",end:"Oct 25, 2026",payDate:"Oct 26, 2026"},
+  {period:44,start:"Oct 26, 2026",end:"Nov 1, 2026",payDate:"Nov 2, 2026"},
+  {period:45,start:"Nov 2, 2026",end:"Nov 8, 2026",payDate:"Nov 9, 2026"},
+  {period:46,start:"Nov 9, 2026",end:"Nov 15, 2026",payDate:"Nov 16, 2026"},
+  {period:47,start:"Nov 16, 2026",end:"Nov 22, 2026",payDate:"Nov 23, 2026"},
+  {period:48,start:"Nov 23, 2026",end:"Nov 29, 2026",payDate:"Nov 30, 2026"},
+  {period:49,start:"Nov 30, 2026",end:"Dec 6, 2026",payDate:"Dec 7, 2026"},
+  {period:50,start:"Dec 7, 2026",end:"Dec 13, 2026",payDate:"Dec 14, 2026"},
+  {period:51,start:"Dec 14, 2026",end:"Dec 20, 2026",payDate:"Dec 21, 2026"},
+  {period:52,start:"Dec 21, 2026",end:"Dec 27, 2026",payDate:"Dec 28, 2026"},
+];
+
+const SEMIMONTHLY_PERIODS = [
+  {period:1,start:"Jan 1, 2026",end:"Jan 15, 2026",payDate:"Jan 16, 2026"},
+  {period:2,start:"Jan 16, 2026",end:"Jan 31, 2026",payDate:"Feb 1, 2026"},
+  {period:3,start:"Feb 1, 2026",end:"Feb 15, 2026",payDate:"Feb 16, 2026"},
+  {period:4,start:"Feb 16, 2026",end:"Feb 28, 2026",payDate:"Mar 1, 2026"},
+  {period:5,start:"Mar 1, 2026",end:"Mar 15, 2026",payDate:"Mar 16, 2026"},
+  {period:6,start:"Mar 16, 2026",end:"Mar 31, 2026",payDate:"Apr 1, 2026"},
+  {period:7,start:"Apr 1, 2026",end:"Apr 15, 2026",payDate:"Apr 16, 2026"},
+  {period:8,start:"Apr 16, 2026",end:"Apr 30, 2026",payDate:"May 1, 2026"},
+  {period:9,start:"May 1, 2026",end:"May 15, 2026",payDate:"May 16, 2026"},
+  {period:10,start:"May 16, 2026",end:"May 31, 2026",payDate:"Jun 1, 2026"},
+  {period:11,start:"Jun 1, 2026",end:"Jun 15, 2026",payDate:"Jun 16, 2026"},
+  {period:12,start:"Jun 16, 2026",end:"Jun 30, 2026",payDate:"Jul 1, 2026"},
+  {period:13,start:"Jul 1, 2026",end:"Jul 15, 2026",payDate:"Jul 16, 2026"},
+  {period:14,start:"Jul 16, 2026",end:"Jul 31, 2026",payDate:"Aug 1, 2026"},
+  {period:15,start:"Aug 1, 2026",end:"Aug 15, 2026",payDate:"Aug 16, 2026"},
+  {period:16,start:"Aug 16, 2026",end:"Aug 31, 2026",payDate:"Sep 1, 2026"},
+  {period:17,start:"Sep 1, 2026",end:"Sep 15, 2026",payDate:"Sep 16, 2026"},
+  {period:18,start:"Sep 16, 2026",end:"Sep 30, 2026",payDate:"Oct 1, 2026"},
+  {period:19,start:"Oct 1, 2026",end:"Oct 15, 2026",payDate:"Oct 16, 2026"},
+  {period:20,start:"Oct 16, 2026",end:"Oct 31, 2026",payDate:"Nov 1, 2026"},
+  {period:21,start:"Nov 1, 2026",end:"Nov 15, 2026",payDate:"Nov 16, 2026"},
+  {period:22,start:"Nov 16, 2026",end:"Nov 30, 2026",payDate:"Dec 1, 2026"},
+  {period:23,start:"Dec 1, 2026",end:"Dec 15, 2026",payDate:"Dec 16, 2026"},
+  {period:24,start:"Dec 16, 2026",end:"Dec 31, 2026",payDate:"Jan 1, 2027"},
+];
+
+const MONTHLY_PERIODS = [
+  {period:1,start:"Jan 1, 2026",end:"Jan 31, 2026",payDate:"Feb 1, 2026"},
+  {period:2,start:"Feb 1, 2026",end:"Feb 28, 2026",payDate:"Mar 1, 2026"},
+  {period:3,start:"Mar 1, 2026",end:"Mar 31, 2026",payDate:"Apr 1, 2026"},
+  {period:4,start:"Apr 1, 2026",end:"Apr 30, 2026",payDate:"May 1, 2026"},
+  {period:5,start:"May 1, 2026",end:"May 31, 2026",payDate:"Jun 1, 2026"},
+  {period:6,start:"Jun 1, 2026",end:"Jun 30, 2026",payDate:"Jul 1, 2026"},
+  {period:7,start:"Jul 1, 2026",end:"Jul 31, 2026",payDate:"Aug 1, 2026"},
+  {period:8,start:"Aug 1, 2026",end:"Aug 31, 2026",payDate:"Sep 1, 2026"},
+  {period:9,start:"Sep 1, 2026",end:"Sep 30, 2026",payDate:"Oct 1, 2026"},
+  {period:10,start:"Oct 1, 2026",end:"Oct 31, 2026",payDate:"Nov 1, 2026"},
+  {period:11,start:"Nov 1, 2026",end:"Nov 30, 2026",payDate:"Dec 1, 2026"},
+  {period:12,start:"Dec 1, 2026",end:"Dec 31, 2026",payDate:"Jan 1, 2027"},
+];
+
+const getPeriodList = (schedule) => {
+  if (schedule === "Weekly") return WEEKLY_PERIODS;
+  if (schedule === "Semi-monthly") return SEMIMONTHLY_PERIODS;
+  if (schedule === "Monthly") return MONTHLY_PERIODS;
+  return BIWEEKLY_PERIODS;
+};
+
 // ─── Run Payroll ──────────────────────────────────────────────────────────────
 const BIWEEKLY_PERIODS = [
   { period: 1,  start: "Jan 5, 2026",  end: "Jan 18, 2026",  payDate: "Jan 19, 2026" },
@@ -999,6 +1104,7 @@ const BIWEEKLY_PERIODS = [
 function RunPayrollPage({ company, setPage }) {
   const [emps, setEmps] = useState([]);
   const [selectedPeriod, setSelectedPeriod] = useState(null);
+  const [selectedFreq, setSelectedFreq] = useState("Bi-weekly");
 
   useEffect(() => {
     const fetchEmps = async () => {
@@ -1062,6 +1168,17 @@ return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRa
       )}
       <Card>
         <div className="p-4 border-b border-gray-50 flex items-center gap-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700"><Calendar size={14} className="text-gray-400" />Frequency:</div>
+          <select
+            className="text-sm border border-gray-200 rounded-lg px-2 py-1 text-blue-600 font-medium focus:outline-none focus:ring-2 focus:ring-blue-300"
+            value={selectedFreq}
+            onChange={e => { setSelectedFreq(e.target.value); setSelectedPeriod(null); }}
+          >
+            <option value="Weekly">Weekly</option>
+            <option value="Bi-weekly">Bi-weekly</option>
+            <option value="Semi-monthly">Semi-monthly</option>
+            <option value="Monthly">Monthly</option>
+          </select>
           <div className="flex items-center gap-2 text-sm font-medium text-gray-700"><Calendar size={14} className="text-gray-400" />Pay Period:</div>
           <select
             className="text-sm border border-gray-200 rounded-lg px-2 py-1 text-blue-600 font-medium focus:outline-none focus:ring-2 focus:ring-blue-300"
@@ -1069,16 +1186,15 @@ return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRa
             onChange={e => setSelectedPeriod(e.target.value)}
           >
             <option value="">-- Select Period --</option>
-            {BIWEEKLY_PERIODS.map(p => (
+            {getPeriodList(selectedFreq).map(p => (
               <option key={p.period} value={p.period}>
                 Period {p.period}: {p.start} – {p.end}
               </option>
             ))}
           </select>
           {selectedPeriod && (
-            <span className="text-xs text-gray-500">Pay Date: <span className="text-green-600 font-medium">{BIWEEKLY_PERIODS[+selectedPeriod-1]?.payDate}</span></span>
+            <span className="text-xs text-gray-500">Pay Date: <span className="text-blue-600 font-medium">{getPeriodList(selectedFreq)[+selectedPeriod-1]?.payDate}</span></span>
           )}
-          <Badge color="blue">Biweekly</Badge>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -1169,8 +1285,8 @@ return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRa
     .from('payroll_runs')
     .insert([{
       company_id: company.id,
-      period: selectedPeriod ? `Period ${selectedPeriod}: ${BIWEEKLY_PERIODS[+selectedPeriod-1]?.start} – ${BIWEEKLY_PERIODS[+selectedPeriod-1]?.end}` : period,
-      pay_date: selectedPeriod ? BIWEEKLY_PERIODS[+selectedPeriod-1]?.payDate : new Date().toISOString().split('T')[0],
+      period: (() => { const pl = getPeriodList(selectedFreq); const p = pl[+selectedPeriod-1]; return p ? `Period ${p.period}: ${p.start} – ${p.end}` : ''; })(),
+      pay_date: getPeriodList(selectedFreq)[+selectedPeriod-1]?.payDate || new Date().toISOString().split('T')[0],
       employees: rows.length,
       gross: totals.gross,
       deductions: +(totals.cpp + totals.ei + totals.tax).toFixed(2),
