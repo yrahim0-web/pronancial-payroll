@@ -1169,8 +1169,8 @@ return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRa
     .from('payroll_runs')
     .insert([{
       company_id: company.id,
-      period: period,
-      pay_date: new Date().toISOString().split('T')[0],
+      period: selectedPeriod ? `Period ${selectedPeriod}: ${BIWEEKLY_PERIODS[+selectedPeriod-1]?.start} – ${BIWEEKLY_PERIODS[+selectedPeriod-1]?.end}` : period,
+      pay_date: selectedPeriod ? BIWEEKLY_PERIODS[+selectedPeriod-1]?.payDate : new Date().toISOString().split('T')[0],
       employees: rows.length,
       gross: totals.gross,
       deductions: +(totals.cpp + totals.ei + totals.tax).toFixed(2),
