@@ -757,15 +757,6 @@ function Dashboard({ company, companies, setPage, setSelectedCompany }) {
           <div className={`flex items-center text-xs ${s.muted} gap-2 px-3 py-1.5 rounded-lg border ${s.border} ${s.surface2}`}>
             <Calendar size={12}/> Period 11 · May 25 – Jun 7
           </div>
-          {/* Theme toggle */}
-          <div className={`flex items-center rounded-xl border ${s.border} ${s.surface2} p-1 gap-1`}>
-            {[['light','☀️ Light'],['dark','🌙 Dark']].map(([t,label])=>(
-              <button key={t} onClick={()=>switchTheme(t)}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${theme===t?(isDark?'bg-[#1e2d40] text-[#e8f0fe]':'bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]'):s.muted}`}>
-                {label}
-              </button>
-            ))}
-          </div>
           <button onClick={()=>setPage("run")} className={`flex items-center gap-1.5 px-3 py-1.5 ${s.accentBg} text-white rounded-xl text-xs font-medium hover:opacity-90 transition-opacity`}>
             <PlayCircle size={13}/> Run Payroll
           </button>
@@ -2279,26 +2270,29 @@ useEffect(() => {
   };
 
   return (
-    <div className={`flex h-screen overflow-hidden transition-colors duration-200 ${isDark?'bg-[#0c1117]':'bg-[#f0f4f8]'}`} style={{ fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div style={{background:isDark?'#0c1117':'#f0f4f8',fontFamily:'Inter,system-ui,sans-serif'}} className="flex h-screen overflow-hidden transition-all duration-200">
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? "w-56" : "w-16"} flex-shrink-0 border-r flex flex-col transition-all duration-200 h-full ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'}`}>
-        <div className={`flex items-center gap-3 px-4 py-4 border-b h-14 ${isDark?'border-[#1e2d40]':'border-gray-100'}`}>
+      <aside style={{width:sidebarOpen?'224px':'64px',background:isDark?'#141b24':'#ffffff',borderRight:`1px solid ${isDark?'#1e2d40':'#f1f5f9'}`}} className="flex-shrink-0 flex flex-col transition-all duration-200 h-full">
+        <div style={{borderBottom:`1px solid ${isDark?'#1e2d40':'#f1f5f9'}`}} className="flex items-center gap-3 px-4 py-4 h-14">
           <div className="w-7 h-7 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <DollarSign size={14} className="text-white" />
           </div>
-          {sidebarOpen && <span className={`font-semibold text-sm leading-tight whitespace-nowrap ${isDark?'text-[#e8f0fe]':'text-gray-900'}`}>Pronancial<br/><span className={`text-xs font-normal ${isDark?'text-[#6b7fa3]':'text-gray-400'}`}>Payroll</span></span>}
+          {sidebarOpen && <span style={{color:isDark?'#e8f0fe':'#0f172a'}} className="font-semibold text-sm leading-tight whitespace-nowrap">Pronancial<br/><span style={{color:isDark?'#6b7fa3':'#94a3b8'}} className="text-xs font-normal">Payroll</span></span>}
         </div>
         <nav className="flex-1 py-3 space-y-0.5 px-2 overflow-y-auto">
           {navItems.map(item => (
             <button key={item.id} onClick={() => setPage(item.id)} title={!sidebarOpen ? item.label : ""}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${page === item.id ? "bg-blue-600 text-white" : isDark ? "text-[#6b7fa3] hover:bg-[#1a2332] hover:text-[#e8f0fe]" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}>
+              style={{color: page===item.id?'#ffffff':isDark?'#6b7fa3':'#64748b', background: page===item.id?'#2563eb':'transparent'}}
+              onMouseEnter={e=>{if(page!==item.id)e.currentTarget.style.background=isDark?'#1a2332':'#f8fafc'}}
+              onMouseLeave={e=>{if(page!==item.id)e.currentTarget.style.background='transparent'}}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all">
               <item.icon size={16} className="flex-shrink-0" />
               {sidebarOpen && <span className="whitespace-nowrap">{item.label}</span>}
             </button>
           ))}
         </nav>
         <div className="p-3 border-t border-gray-100">
-          <button onClick={async () => { await supabase.auth.signOut(); setLoggedIn(false); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${isDark?'text-[#6b7fa3] hover:text-red-400 hover:bg-red-900/20':'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}>
+          <button onClick={async () => { await supabase.auth.signOut(); setLoggedIn(false); }} style={{color:isDark?'#6b7fa3':'#94a3b8'}} onMouseEnter={e=>{e.currentTarget.style.color='#ef4444';e.currentTarget.style.background=isDark?'rgba(239,68,68,0.1)':'#fef2f2'}} onMouseLeave={e=>{e.currentTarget.style.color=isDark?'#6b7fa3':'#94a3b8';e.currentTarget.style.background='transparent'}} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all">
             <LogOut size={15} className="flex-shrink-0"/>
             {sidebarOpen && <span>Sign out</span>}
           </button>
@@ -2308,7 +2302,7 @@ useEffect(() => {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <header className={`h-14 border-b flex items-center gap-3 px-4 flex-shrink-0 transition-all duration-200 ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'}`}>
+        <header style={{background:isDark?'#141b24':'#ffffff',borderBottom:`1px solid ${isDark?'#1e2d40':'#f1f5f9'}`}} className="h-14 flex items-center gap-3 px-4 flex-shrink-0 transition-all duration-200">
           <button onClick={() => setSidebarOpen(o => !o)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
             <Menu size={16} />
           </button>
@@ -2320,7 +2314,7 @@ useEffect(() => {
               <ChevronDown size={13} className="text-gray-400" />
             </button>
             {companyDropdown && (
-              <div className={`absolute top-full left-0 mt-1 w-56 ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'} border rounded-2xl shadow-lg z-50 py-1.5`}>
+              <div style={{background:isDark?'#141b24':'#ffffff',border:`1px solid ${isDark?'#1e2d40':'#f1f5f9'}`}} className="absolute top-full left-0 mt-1 w-56 rounded-2xl shadow-lg z-50 py-1.5">
                 {companies.map(c=>(
                   <button key={c.id} onClick={() => { setSelectedCompany(c); setCompanyDropdown(false); }} className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${isDark?'hover:bg-[#1a2332]':'hover:bg-gray-50'}`}>
                     <div className="w-6 h-6 bg-blue-50 rounded-lg flex items-center justify-center text-xs font-bold text-blue-600">{c.name[0]}</div>
@@ -2337,6 +2331,14 @@ useEffect(() => {
             <input className={`w-full pl-9 pr-3 py-1.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${isDark?'border-[#1e2d40] bg-[#1a2332] text-[#e8f0fe] placeholder-[#6b7fa3]':'border-gray-200 bg-gray-50 text-gray-900 focus:bg-white'}`} placeholder="Search…"/>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <div style={{background:isDark?'#1a2332':'#f1f5f9',border:`1px solid ${isDark?'#1e2d40':'#e2e8f0'}`,borderRadius:'10px',padding:'3px',display:'flex',gap:'2px'}}>
+              {[['light','☀️ Light'],['dark','🌙 Dark']].map(([t,label])=>(
+                <button key={t} onClick={()=>switchTheme(t)}
+                  style={{background:theme===t?(isDark?'#2d3f55':'#ffffff'):'transparent',color:theme===t?(isDark?'#e8f0fe':'#0f172a'):(isDark?'#6b7fa3':'#94a3b8'),borderRadius:'7px',padding:'4px 10px',fontSize:'11.5px',fontWeight:500,border:'none',cursor:'pointer',transition:'all 0.15s'}}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <button onClick={() => setPage("run")} className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium transition-colors">
               <Plus size={13}/> Run Payroll
             </button>
@@ -2370,7 +2372,7 @@ useEffect(() => {
         </header>
 
         {/* Page content */}
-        <main className={`flex-1 overflow-y-auto ${isDark?'bg-[#0c1117]':'bg-[#f0f4f8]'}`}>
+        <main style={{background:isDark?'#0c1117':'#f0f4f8'}} className="flex-1 overflow-y-auto transition-all duration-200">
           <div key={selectedCompany.id}>
             {renderPage()}
           </div>
