@@ -556,7 +556,7 @@ function LoginPage({ onLogin }) {
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
-function Dashboard({ company, companies, setPage, setSelectedCompany, theme: themeProp, switchTheme: switchThemeProp }) {
+function Dashboard({ company, companies, setPage, setSelectedCompany }) {
   const [emps, setEmps] = useState([]);
   const [recentRuns, setRecentRuns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2211,9 +2211,6 @@ useEffect(() => {
   const [theme, setTheme] = useState(() => localStorage.getItem('pron_theme') || 'light');
   const isDark = theme === 'dark';
   const switchTheme = (t) => { setTheme(t); localStorage.setItem('pron_theme', t); };
-  const [theme, setTheme] = useState(() => localStorage.getItem('pron_theme') || 'light');
-  const isDark = theme === 'dark';
-  const switchTheme = (t) => { setTheme(t); localStorage.setItem('pron_theme', t); };
   const [companies, setCompanies] = useState([]);
 const [loading, setLoading] = useState(true);
 
@@ -2269,7 +2266,7 @@ useEffect(() => {
 
   const renderPage = () => {
     switch (page) {
-      case "dashboard": return <Dashboard company={selectedCompany} companies={companies} setPage={setPage} setSelectedCompany={setSelectedCompany} theme={theme} switchTheme={switchTheme} />;
+      case "dashboard": return <Dashboard company={selectedCompany} companies={companies} setPage={setPage} setSelectedCompany={setSelectedCompany} />;
       case "companies": return <CompaniesPage companies={companies} setCompanies={setCompanies} setSelectedCompany={setSelectedCompany} setPage={setPage} />;
       case "employees": return <EmployeesPage company={selectedCompany} />;
       case "run": return <RunPayrollPage company={selectedCompany} setPage={setPage} />;
@@ -2284,8 +2281,8 @@ useEffect(() => {
   return (
     <div className={`flex h-screen overflow-hidden transition-colors duration-200 ${isDark?'bg-[#0c1117]':'bg-[#f0f4f8]'}`} style={{ fontFamily: "Inter, system-ui, sans-serif" }}>
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? "w-56" : "w-16"} flex-shrink-0 ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'} border-r flex flex-col transition-all duration-200 h-full`}>
-        <div className={`flex items-center gap-3 px-4 py-4 border-b ${isDark?'border-[#1e2d40]':'border-gray-100'} h-14`}>
+      <aside className={`${sidebarOpen ? "w-56" : "w-16"} flex-shrink-0 border-r flex flex-col transition-all duration-200 h-full ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'}`}>
+        <div className={`flex items-center gap-3 px-4 py-4 border-b h-14 ${isDark?'border-[#1e2d40]':'border-gray-100'}`}>
           <div className="w-7 h-7 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <DollarSign size={14} className="text-white" />
           </div>
@@ -2294,7 +2291,7 @@ useEffect(() => {
         <nav className="flex-1 py-3 space-y-0.5 px-2 overflow-y-auto">
           {navItems.map(item => (
             <button key={item.id} onClick={() => setPage(item.id)} title={!sidebarOpen ? item.label : ""}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${page === item.id ? "bg-blue-600 text-white" : isDark?"text-[#6b7fa3] hover:bg-[#1a2332] hover:text-[#e8f0fe]":"text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}>
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${page === item.id ? "bg-blue-600 text-white" : isDark ? "text-[#6b7fa3] hover:bg-[#1a2332] hover:text-[#e8f0fe]" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}>
               <item.icon size={16} className="flex-shrink-0" />
               {sidebarOpen && <span className="whitespace-nowrap">{item.label}</span>}
             </button>
@@ -2311,7 +2308,7 @@ useEffect(() => {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <header className={`h-14 ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'} border-b flex items-center gap-3 px-4 flex-shrink-0 transition-colors duration-200`}>
+        <header className={`h-14 border-b flex items-center gap-3 px-4 flex-shrink-0 transition-all duration-200 ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'}`}>
           <button onClick={() => setSidebarOpen(o => !o)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
             <Menu size={16} />
           </button>
@@ -2319,15 +2316,15 @@ useEffect(() => {
           <div className="relative">
             <button onClick={() => setCompanyDropdown(o=>!o)} className={`flex items-center gap-2 px-3 py-1.5 border rounded-xl transition-colors ${isDark?'border-[#1e2d40] hover:bg-[#1a2332] text-[#e8f0fe]':'border-gray-200 hover:bg-gray-50'}`}>
               <div className="w-5 h-5 bg-blue-100 rounded-md flex items-center justify-center text-xs font-bold text-blue-600">{selectedCompany?.name?.[0] || "?"}</div>
-              <span className={`text-sm font-medium max-w-32 truncate ${isDark?'text-[#e8f0fe]':'text-gray-800'}`}>{selectedCompany.name}</span>
+              <span className={`text-sm font-medium max-w-32 truncate ${isDark?'text-[#e8f0fe]':'text-gray-800'}`} style={{color: isDark?'#e8f0fe':'#1e293b'}}>{selectedCompany.name}</span>
               <ChevronDown size={13} className="text-gray-400" />
             </button>
             {companyDropdown && (
               <div className={`absolute top-full left-0 mt-1 w-56 ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'} border rounded-2xl shadow-lg z-50 py-1.5`}>
                 {companies.map(c=>(
-                  <button key={c.id} onClick={() => { setSelectedCompany(c); setCompanyDropdown(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                  <button key={c.id} onClick={() => { setSelectedCompany(c); setCompanyDropdown(false); }} className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${isDark?'hover:bg-[#1a2332]':'hover:bg-gray-50'}`}>
                     <div className="w-6 h-6 bg-blue-50 rounded-lg flex items-center justify-center text-xs font-bold text-blue-600">{c.name[0]}</div>
-                    <div className="text-left"><p className="text-xs font-medium text-gray-800">{c.name}</p><p className="text-xs text-gray-400">{c.province} · {c.employees} emp.</p></div>
+                    <div className="text-left"><p className={`text-xs font-medium ${isDark?'text-[#e8f0fe]':'text-gray-800'}`}>{c.name}</p><p className={`text-xs ${isDark?'text-[#6b7fa3]':'text-gray-400'}`}>{c.province} · {c.employees} emp.</p></div>
                     {c.id === selectedCompany.id && <CheckCircle2 size={12} className="ml-auto text-blue-600"/>}
                   </button>
                 ))}
@@ -2337,7 +2334,7 @@ useEffect(() => {
           {/* Search */}
           <div className="relative flex-1 max-w-xs hidden md:block">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-            <input className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all" placeholder="Search…"/>
+            <input className={`w-full pl-9 pr-3 py-1.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all ${isDark?'border-[#1e2d40] bg-[#1a2332] text-[#e8f0fe] placeholder-[#6b7fa3]':'border-gray-200 bg-gray-50 text-gray-900 focus:bg-white'}`} placeholder="Search…"/>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => setPage("run")} className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium transition-colors">
@@ -2350,8 +2347,8 @@ useEffect(() => {
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
               </button>
               {notifOpen && (
-                <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-gray-100 rounded-2xl shadow-lg z-50 py-2">
-                  <div className="px-4 py-2 border-b border-gray-50"><p className="text-xs font-semibold text-gray-700">Notifications</p></div>
+                <div className={`absolute right-0 top-full mt-1 w-72 border rounded-2xl shadow-lg z-50 py-2 ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'}`}>
+                  <div className={`px-4 py-2 border-b ${isDark?'border-[#1e2d40]':'border-gray-50'}`}><p className={`text-xs font-semibold ${isDark?'text-[#e8f0fe]':'text-gray-700'}`}>Notifications</p></div>
                   {[
                     {msg:"Atlantic Seafoods CRA remittance overdue",time:"2h ago",color:"red"},
                     {msg:"Pacific NW Tech payroll due Jun 13",time:"5h ago",color:"amber"},
@@ -2367,7 +2364,7 @@ useEffect(() => {
             {/* Profile */}
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors">
               <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold text-white">JW</div>
-              <span className="text-xs font-medium text-gray-700 hidden md:block">Walsh Accounting</span>
+              <span className={`text-xs font-medium hidden md:block ${isDark?'text-[#e8f0fe]':'text-gray-700'}`}>Walsh Accounting</span>
             </div>
           </div>
         </header>
