@@ -570,9 +570,12 @@ function Dashboard({ company, companies, setPage, setSelectedCompany, theme: the
   const donutChart = useRef(null);
   const barChart = useRef(null);
 
-  const theme = themeProp || 'light';
   const isDark = theme === 'dark';
-  const switchTheme = switchThemeProp || ((t) => {});
+
+  const switchTheme = (t) => {
+    setTheme(t);
+    localStorage.setItem('pron_theme', t);
+  };
 
   const D = isDark ? {
     bg:'#0c1117', surface:'#141b24', surface2:'#1a2332', border:'#1e2d40',
@@ -746,7 +749,30 @@ function Dashboard({ company, companies, setPage, setSelectedCompany, theme: the
         <div className="flex items-center gap-3">
           <div className={`w-7 h-7 ${s.accentBg} rounded-lg flex items-center justify-center text-white font-bold text-xs`}>P</div>
           <div>
-            <div className="p-5 space-y-5">
+            <div className="font-semibold text-sm leading-tight">{company.name}</div>
+            <div className={`text-xs ${s.muted}`}>Fiscal 2026 · {getNextPayDate()}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center text-xs ${s.muted} gap-2 px-3 py-1.5 rounded-lg border ${s.border} ${s.surface2}`}>
+            <Calendar size={12}/> Period 11 · May 25 – Jun 7
+          </div>
+          {/* Theme toggle */}
+          <div className={`flex items-center rounded-xl border ${s.border} ${s.surface2} p-1 gap-1`}>
+            {[['light','☀️ Light'],['dark','🌙 Dark']].map(([t,label])=>(
+              <button key={t} onClick={()=>switchTheme(t)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${theme===t?(isDark?'bg-[#1e2d40] text-[#e8f0fe]':'bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]'):s.muted}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button onClick={()=>setPage("run")} className={`flex items-center gap-1.5 px-3 py-1.5 ${s.accentBg} text-white rounded-xl text-xs font-medium hover:opacity-90 transition-opacity`}>
+            <PlayCircle size={13}/> Run Payroll
+          </button>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-5">
         {/* ── KPI Row ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
@@ -2314,14 +2340,6 @@ useEffect(() => {
             <input className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all" placeholder="Search…"/>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <div className={`flex items-center rounded-xl border p-1 gap-1 ${isDark?'border-[#1e2d40] bg-[#1a2332]':'border-gray-200 bg-gray-100'}`}>
-              {[['light','☀️'],['dark','🌙']].map(([t,icon])=>(
-                <button key={t} onClick={()=>switchTheme(t)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${theme===t?(isDark?'bg-[#1e2d40] text-white':'bg-white text-gray-900 shadow-sm'):(isDark?'text-[#6b7fa3]':'text-gray-400')}`}>
-                  {icon} {t.charAt(0).toUpperCase()+t.slice(1)}
-                </button>
-              ))}
-            </div>
             <button onClick={() => setPage("run")} className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium transition-colors">
               <Plus size={13}/> Run Payroll
             </button>
