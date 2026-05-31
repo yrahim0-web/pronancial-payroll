@@ -556,7 +556,7 @@ function LoginPage({ onLogin }) {
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
-function Dashboard({ company, companies, setPage, setSelectedCompany }) {
+function Dashboard({ company, companies, setPage, setSelectedCompany, theme: themeProp, switchTheme: switchThemeProp }) {
   const [emps, setEmps] = useState([]);
   const [recentRuns, setRecentRuns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -570,12 +570,9 @@ function Dashboard({ company, companies, setPage, setSelectedCompany }) {
   const donutChart = useRef(null);
   const barChart = useRef(null);
 
+  const theme = themeProp || 'light';
   const isDark = theme === 'dark';
-
-  const switchTheme = (t) => {
-    setTheme(t);
-    localStorage.setItem('pron_theme', t);
-  };
+  const switchTheme = switchThemeProp || ((t) => {});
 
   const D = isDark ? {
     bg:'#0c1117', surface:'#141b24', surface2:'#1a2332', border:'#1e2d40',
@@ -749,30 +746,7 @@ function Dashboard({ company, companies, setPage, setSelectedCompany }) {
         <div className="flex items-center gap-3">
           <div className={`w-7 h-7 ${s.accentBg} rounded-lg flex items-center justify-center text-white font-bold text-xs`}>P</div>
           <div>
-            <div className="font-semibold text-sm leading-tight">{company.name}</div>
-            <div className={`text-xs ${s.muted}`}>Fiscal 2026 · {getNextPayDate()}</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className={`flex items-center text-xs ${s.muted} gap-2 px-3 py-1.5 rounded-lg border ${s.border} ${s.surface2}`}>
-            <Calendar size={12}/> Period 11 · May 25 – Jun 7
-          </div>
-          {/* Theme toggle */}
-          <div className={`flex items-center rounded-xl border ${s.border} ${s.surface2} p-1 gap-1`}>
-            {[['light','☀️ Light'],['dark','🌙 Dark']].map(([t,label])=>(
-              <button key={t} onClick={()=>switchTheme(t)}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${theme===t?(isDark?'bg-[#1e2d40] text-[#e8f0fe]':'bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]'):s.muted}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <button onClick={()=>setPage("run")} className={`flex items-center gap-1.5 px-3 py-1.5 ${s.accentBg} text-white rounded-xl text-xs font-medium hover:opacity-90 transition-opacity`}>
-            <PlayCircle size={13}/> Run Payroll
-          </button>
-        </div>
-      </div>
-
-      <div className="p-5 space-y-5">
+            <div className="p-5 space-y-5">
         {/* ── KPI Row ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
@@ -2208,6 +2182,12 @@ useEffect(() => {
 }, []);
   const [page, setPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [theme, setTheme] = useState(() => localStorage.getItem('pron_theme') || 'light');
+  const isDark = theme === 'dark';
+  const switchTheme = (t) => { setTheme(t); localStorage.setItem('pron_theme', t); };
+  const [theme, setTheme] = useState(() => localStorage.getItem('pron_theme') || 'light');
+  const isDark = theme === 'dark';
+  const switchTheme = (t) => { setTheme(t); localStorage.setItem('pron_theme', t); };
   const [companies, setCompanies] = useState([]);
 const [loading, setLoading] = useState(true);
 
@@ -2263,7 +2243,7 @@ useEffect(() => {
 
   const renderPage = () => {
     switch (page) {
-      case "dashboard": return <Dashboard company={selectedCompany} companies={companies} setPage={setPage} setSelectedCompany={setSelectedCompany} />;
+      case "dashboard": return <Dashboard company={selectedCompany} companies={companies} setPage={setPage} setSelectedCompany={setSelectedCompany} theme={theme} switchTheme={switchTheme} />;
       case "companies": return <CompaniesPage companies={companies} setCompanies={setCompanies} setSelectedCompany={setSelectedCompany} setPage={setPage} />;
       case "employees": return <EmployeesPage company={selectedCompany} />;
       case "run": return <RunPayrollPage company={selectedCompany} setPage={setPage} />;
@@ -2276,26 +2256,26 @@ useEffect(() => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden" style={{ fontFamily: "Inter, system-ui, sans-serif" }}>
+    <div className={`flex h-screen overflow-hidden transition-colors duration-200 ${isDark?'bg-[#0c1117]':'bg-[#f0f4f8]'}`} style={{ fontFamily: "Inter, system-ui, sans-serif" }}>
       {/* Sidebar */}
-      <aside className={`${sidebarOpen ? "w-56" : "w-16"} flex-shrink-0 bg-white border-r border-gray-100 flex flex-col transition-all duration-200 h-full`}>
-        <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100 h-14">
+      <aside className={`${sidebarOpen ? "w-56" : "w-16"} flex-shrink-0 ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'} border-r flex flex-col transition-all duration-200 h-full`}>
+        <div className={`flex items-center gap-3 px-4 py-4 border-b ${isDark?'border-[#1e2d40]':'border-gray-100'} h-14`}>
           <div className="w-7 h-7 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <DollarSign size={14} className="text-white" />
           </div>
-          {sidebarOpen && <span className="font-semibold text-sm text-gray-900 leading-tight whitespace-nowrap">Pronancial<br/><span className="text-xs font-normal text-gray-400">Payroll</span></span>}
+          {sidebarOpen && <span className={`font-semibold text-sm leading-tight whitespace-nowrap ${isDark?'text-[#e8f0fe]':'text-gray-900'}`}>Pronancial<br/><span className={`text-xs font-normal ${isDark?'text-[#6b7fa3]':'text-gray-400'}`}>Payroll</span></span>}
         </div>
         <nav className="flex-1 py-3 space-y-0.5 px-2 overflow-y-auto">
           {navItems.map(item => (
             <button key={item.id} onClick={() => setPage(item.id)} title={!sidebarOpen ? item.label : ""}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${page === item.id ? "bg-blue-600 text-white" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}>
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${page === item.id ? "bg-blue-600 text-white" : isDark?"text-[#6b7fa3] hover:bg-[#1a2332] hover:text-[#e8f0fe]":"text-gray-500 hover:bg-gray-50 hover:text-gray-900"}`}>
               <item.icon size={16} className="flex-shrink-0" />
               {sidebarOpen && <span className="whitespace-nowrap">{item.label}</span>}
             </button>
           ))}
         </nav>
         <div className="p-3 border-t border-gray-100">
-          <button onClick={async () => { await supabase.auth.signOut(); setLoggedIn(false); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors`}>
+          <button onClick={async () => { await supabase.auth.signOut(); setLoggedIn(false); }} className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${isDark?'text-[#6b7fa3] hover:text-red-400 hover:bg-red-900/20':'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}>
             <LogOut size={15} className="flex-shrink-0"/>
             {sidebarOpen && <span>Sign out</span>}
           </button>
@@ -2305,19 +2285,19 @@ useEffect(() => {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <header className="h-14 bg-white border-b border-gray-100 flex items-center gap-3 px-4 flex-shrink-0">
+        <header className={`h-14 ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'} border-b flex items-center gap-3 px-4 flex-shrink-0 transition-colors duration-200`}>
           <button onClick={() => setSidebarOpen(o => !o)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
             <Menu size={16} />
           </button>
           {/* Company selector */}
           <div className="relative">
-            <button onClick={() => setCompanyDropdown(o=>!o)} className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+            <button onClick={() => setCompanyDropdown(o=>!o)} className={`flex items-center gap-2 px-3 py-1.5 border rounded-xl transition-colors ${isDark?'border-[#1e2d40] hover:bg-[#1a2332] text-[#e8f0fe]':'border-gray-200 hover:bg-gray-50'}`}>
               <div className="w-5 h-5 bg-blue-100 rounded-md flex items-center justify-center text-xs font-bold text-blue-600">{selectedCompany?.name?.[0] || "?"}</div>
-              <span className="text-sm font-medium text-gray-800 max-w-32 truncate">{selectedCompany.name}</span>
+              <span className={`text-sm font-medium max-w-32 truncate ${isDark?'text-[#e8f0fe]':'text-gray-800'}`}>{selectedCompany.name}</span>
               <ChevronDown size={13} className="text-gray-400" />
             </button>
             {companyDropdown && (
-              <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-gray-100 rounded-2xl shadow-lg z-50 py-1.5">
+              <div className={`absolute top-full left-0 mt-1 w-56 ${isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-gray-100'} border rounded-2xl shadow-lg z-50 py-1.5`}>
                 {companies.map(c=>(
                   <button key={c.id} onClick={() => { setSelectedCompany(c); setCompanyDropdown(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors">
                     <div className="w-6 h-6 bg-blue-50 rounded-lg flex items-center justify-center text-xs font-bold text-blue-600">{c.name[0]}</div>
@@ -2334,6 +2314,14 @@ useEffect(() => {
             <input className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all" placeholder="Search…"/>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <div className={`flex items-center rounded-xl border p-1 gap-1 ${isDark?'border-[#1e2d40] bg-[#1a2332]':'border-gray-200 bg-gray-100'}`}>
+              {[['light','☀️'],['dark','🌙']].map(([t,icon])=>(
+                <button key={t} onClick={()=>switchTheme(t)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${theme===t?(isDark?'bg-[#1e2d40] text-white':'bg-white text-gray-900 shadow-sm'):(isDark?'text-[#6b7fa3]':'text-gray-400')}`}>
+                  {icon} {t.charAt(0).toUpperCase()+t.slice(1)}
+                </button>
+              ))}
+            </div>
             <button onClick={() => setPage("run")} className="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium transition-colors">
               <Plus size={13}/> Run Payroll
             </button>
@@ -2367,7 +2355,7 @@ useEffect(() => {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className={`flex-1 overflow-y-auto ${isDark?'bg-[#0c1117]':'bg-[#f0f4f8]'}`}>
           <div key={selectedCompany.id}>
             {renderPage()}
           </div>
