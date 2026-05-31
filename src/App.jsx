@@ -604,7 +604,7 @@ function Dashboard({ company, companies, setPage, setSelectedCompany }) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">{company.name}</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Payroll dashboard · Fiscal 2026</p>
+          <p className="text-sm text-gray-400 mt-0.5">Payroll dashboard · Fiscal 2026 &nbsp;·&nbsp; <span className="text-blue-400 text-xs font-mono">{new Date().toLocaleTimeString('en-CA')}</span></p>
         </div>
         <button onClick={() => setPage("run")} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">
           <PlayCircle size={15} /> Run Payroll
