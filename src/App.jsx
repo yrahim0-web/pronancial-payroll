@@ -559,39 +559,67 @@ function LoginPage({ onLogin }) {
 function Dashboard({ company, companies, setPage, setSelectedCompany }) {
   const [emps, setEmps] = useState([]);
   const [recentRuns, setRecentRuns] = useState([]);
-  const [trendData, setTrendData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState(() => localStorage.getItem('pron_theme') || 'light');
+  const [activeView, setActiveView] = useState('both');
+  const [activeBar, setActiveBar] = useState('gross');
+  const trendRef = useRef(null);
+  const donutRef = useRef(null);
+  const barRef = useRef(null);
+  const trendChart = useRef(null);
+  const donutChart = useRef(null);
+  const barChart = useRef(null);
+
+  const isDark = theme === 'dark';
+
+  const switchTheme = (t) => {
+    setTheme(t);
+    localStorage.setItem('pron_theme', t);
+  };
+
+  const D = isDark ? {
+    bg:'#0c1117', surface:'#141b24', surface2:'#1a2332', border:'#1e2d40',
+    text:'#e8f0fe', muted:'#6b7fa3', faint:'#0f1620',
+    grid:'rgba(255,255,255,0.04)', tick:'#6b7fa3',
+    accent:'#3b82f6', green:'#10b981', amber:'#f59e0b', red:'#ef4444', cyan:'#06b6d4', purple:'#8b5cf6',
+  } : {
+    bg:'#f0f4f8', surface:'#ffffff', surface2:'#f4f7fb', border:'#e2e8f0',
+    text:'#0f172a', muted:'#64748b', faint:'#eef2f7',
+    grid:'rgba(0,0,0,0.04)', tick:'#94a3b8',
+    accent:'#2563eb', green:'#059669', amber:'#d97706', red:'#dc2626', cyan:'#0891b2', purple:'#7c3aed',
+  };
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       const [{ data: empData }, { data: runData }] = await Promise.all([
         supabase.from('employees').select('*').eq('company_id', company.id).eq('status', 'active'),
-        supabase.from('payroll_runs').select('*').eq('company_id', company.id).order('created_at', { ascending: false }).limit(6),
+        supabase.from('payroll_runs').select('*').eq('company_id', company.id).order('created_at', { ascending: false }).limit(12),
       ]);
       if (empData) setEmps(empData);
       if (runData) {
         setRecentRuns(runData);
-        // Build trend from real runs — group by month
         const byMonth = {};
         runData.forEach(r => {
           const d = new Date(r.pay_date || r.created_at);
           const key = d.toLocaleString('default', { month: 'short' });
           byMonth[key] = (byMonth[key] || 0) + (+r.gross || 0);
         });
-        setTrendData(Object.entries(byMonth).reverse().map(([month, gross]) => ({ month, gross })));
-      }
+        }
       setLoading(false);
     };
     load();
   }, [company.id]);
 
   const ytdGross = recentRuns.reduce((a, r) => a + (+r.gross || 0), 0);
-  const lastRun = recentRuns[0];
-  const nextPayDate = company.next_payroll || company.nextPayroll || '—';
-  const freq = company.payroll_freq || 'Bi-weekly';
+  const ytdNet   = recentRuns.reduce((a, r) => a + (+r.net   || 0), 0);
+  const ytdCPP   = recentRuns.reduce((a, r) => a + (r.details||[]).reduce((x,d)=>x+(+d.cpp||0),0), 0);
+  const ytdEI    = recentRuns.reduce((a, r) => a + (r.details||[]).reduce((x,d)=>x+(+d.ei||0),0), 0);
+  const ytdFed   = recentRuns.reduce((a, r) => a + (r.details||[]).reduce((x,d)=>x+(+d.fed_tax||0),0), 0);
+  const ytdProv  = recentRuns.reduce((a, r) => a + (r.details||[]).reduce((x,d)=>x+(+d.prov_tax||0),0), 0);
+  const remitTotal = (ytdCPP*2) + (ytdEI*2.4) + ytdFed + ytdProv;
 
-  // Next payroll date: find next upcoming period
+  const freq = company.payroll_freq || 'Bi-weekly';
   const getNextPayDate = () => {
     const allPeriods = getPeriodList(freq);
     const today = new Date();
@@ -599,157 +627,362 @@ function Dashboard({ company, companies, setPage, setSelectedCompany }) {
     return next ? next.payDate : '—';
   };
 
+  const byMonth = {};
+  const byMonthNet = {};
+  recentRuns.forEach(r => {
+    const key = new Date(r.pay_date || r.created_at).toLocaleString('default', { month: 'short' });
+    byMonth[key]    = (byMonth[key]    || 0) + (+r.gross || 0);
+    byMonthNet[key] = (byMonthNet[key] || 0) + (+r.net   || 0);
+  });
+  const trendLabels = Object.keys(byMonth).reverse();
+  const trendGross  = trendLabels.map(m => +byMonth[m].toFixed(2));
+  const trendNet    = trendLabels.map(m => +(byMonthNet[m]||0).toFixed(2));
+  const trendDed    = trendGross.map((g,i) => +(g - trendNet[i]).toFixed(2));
+
+  const AV_BG = ['bg-blue-100','bg-emerald-100','bg-amber-100','bg-purple-100','bg-cyan-100'];
+  const AV_TX = ['text-blue-700','text-emerald-700','text-amber-700','text-purple-700','text-cyan-700'];
+
+  const cppPct  = Math.min(ytdCPP  / 4230.45 * 100, 100);
+  const eiPct   = Math.min(ytdEI   / 1123.07 * 100, 100);
+  const fedPct  = Math.min(ytdFed  / 30000   * 100, 100);
+  const runsPct = Math.min(recentRuns.length / 26   * 100, 100);
+
+  const lastTwo = recentRuns.length >= 2 ? [recentRuns[0], recentRuns[1]] : null;
+  const delta = lastTwo && lastTwo[1].gross > 0
+    ? (((lastTwo[0].gross - lastTwo[1].gross) / lastTwo[1].gross) * 100).toFixed(1)
+    : null;
+
+  const chartColors = {
+    grid:   isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)',
+    tick:   isDark ? '#6b7fa3' : '#94a3b8',
+    blue:   isDark ? '#3b82f6' : '#2563eb',
+    green:  isDark ? '#10b981' : '#059669',
+    amber:  '#f59e0b',
+    cyan:   '#06b6d4',
+    purple: '#8b5cf6',
+  };
+
+  useEffect(() => {
+    const build = async () => {
+      if (!trendRef.current) return;
+      const ChartJS = (await import('chart.js/auto')).default;
+      if (trendChart.current) trendChart.current.destroy();
+      const ctx = trendRef.current.getContext('2d');
+    const datasets = [];
+    if (activeView === 'both' || activeView === 'gross')
+      datasets.push({ label:'Gross', data: trendGross, borderColor: chartColors.blue, backgroundColor: isDark?'rgba(59,130,246,0.08)':'rgba(37,99,235,0.06)', borderWidth:2, pointRadius:3, pointBackgroundColor: chartColors.blue, tension:0.35, fill: activeView==='gross' });
+    if (activeView === 'both' || activeView === 'net')
+      datasets.push({ label:'Net', data: trendNet, borderColor: chartColors.green, backgroundColor: isDark?'rgba(16,185,129,0.05)':'rgba(5,150,105,0.04)', borderWidth:2, pointRadius:3, pointBackgroundColor: chartColors.green, tension:0.35, fill: false });
+    if (activeView === 'ded')
+      datasets.push({ label:'Deductions', data: trendDed, borderColor: chartColors.amber, backgroundColor:'rgba(245,158,11,0.06)', borderWidth:2, pointRadius:3, pointBackgroundColor: chartColors.amber, tension:0.35, fill:true, borderDash:[4,3] });
+    trendChart.current = new ChartJS(ctx, {
+      type:'line',
+      data:{ labels: trendLabels.length ? trendLabels : ['No data'], datasets: datasets.length ? datasets : [{ label:'No data', data:[0], borderColor: chartColors.blue, borderWidth:1, pointRadius:0 }] },
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c=>`${c.dataset.label}: $${Number(c.raw).toLocaleString()}` }}},
+        scales:{ x:{ grid:{color:chartColors.grid}, ticks:{color:chartColors.tick,font:{size:10}}, border:{color:'transparent'} }, y:{ grid:{color:chartColors.grid}, ticks:{color:chartColors.tick,font:{size:10},callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v)}, border:{color:'transparent'} } } }
+    });
+    }; build();
+  }, [trendLabels.join(), trendGross.join(), trendNet.join(), activeView, theme]);
+
+  useEffect(() => {
+    const build = async () => {
+      if (!donutRef.current) return;
+      const ChartJS = (await import('chart.js/auto')).default;
+      if (donutChart.current) donutChart.current.destroy();
+      const ctx = donutRef.current.getContext('2d');
+      const vals = [ytdCPP, ytdEI, ytdFed, ytdProv];
+      const total = vals.reduce((a,b)=>a+b,0) || 1;
+      donutChart.current = new ChartJS(ctx, {
+        type:'doughnut',
+        data:{ labels:['CPP','EI','Fed Tax','Prov Tax'], datasets:[{ data:vals, backgroundColor:[chartColors.blue,chartColors.cyan,chartColors.amber,chartColors.purple], borderWidth:0, hoverOffset:3 }] },
+        options:{ responsive:true, maintainAspectRatio:false, cutout:'65%', plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c=>`${c.label}: $${Number(c.raw).toFixed(2)} (${(c.raw/total*100).toFixed(1)}%)` }}}}
+      });
+    }; build();
+  }, [ytdCPP, ytdEI, ytdFed, ytdProv, theme]);
+
+  useEffect(() => {
+    const build = async () => {
+      if (!barRef.current || !emps.length) return;
+      const ChartJS = (await import('chart.js/auto')).default;
+      if (barChart.current) barChart.current.destroy();
+      const ctx = barRef.current.getContext('2d');
+      const labels = emps.map(e => e.name.split(' ')[0]);
+      const dataMap = {
+        gross: emps.map(e => +(e.ytd_gross||0)),
+        net:   emps.map(e => +((e.ytd_gross||0)-(e.ytd_cpp||0)-(e.ytd_ei||0)-(e.ytd_fed_tax||0)-(e.ytd_prov_tax||0))),
+        cpp:   emps.map(e => +(e.ytd_cpp||0)),
+        ei:    emps.map(e => +(e.ytd_ei||0)),
+      };
+      const colorMap = { gross:chartColors.blue, net:chartColors.green, cpp:chartColors.amber, ei:chartColors.cyan };
+      barChart.current = new ChartJS(ctx, {
+        type:'bar',
+        data:{ labels, datasets:[{ label: activeBar, data: dataMap[activeBar], backgroundColor: colorMap[activeBar], borderRadius:4, barThickness:16 }] },
+        options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c=>`$${Number(c.raw).toLocaleString()}` }}},
+          scales:{ x:{ grid:{color:chartColors.grid}, ticks:{color:chartColors.tick,font:{size:10},callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'k':v)}, border:{color:'transparent'} }, y:{ grid:{display:false}, ticks:{color:chartColors.tick,font:{size:10}}, border:{color:'transparent'} } } }
+      });
+    }; build();
+  }, [emps.map(e=>e.id).join(), activeBar, theme]);
+
+  const segTotal = (ytdCPP+ytdEI+ytdFed+ytdProv) || 1;
+  const segData = [
+    { label:'CPP',      val:ytdCPP,  pct:(ytdCPP/segTotal*100).toFixed(1),  color:'#3b82f6' },
+    { label:'EI',       val:ytdEI,   pct:(ytdEI/segTotal*100).toFixed(1),   color:'#06b6d4' },
+    { label:'Federal',  val:ytdFed,  pct:(ytdFed/segTotal*100).toFixed(1),  color:'#f59e0b' },
+    { label:'Prov',     val:ytdProv, pct:(ytdProv/segTotal*100).toFixed(1), color:'#8b5cf6' },
+  ];
+
+  const s = {
+    wrap:    `min-h-screen transition-colors duration-200 ${isDark?'bg-[#0c1117] text-[#e8f0fe]':'bg-[#f0f4f8] text-[#0f172a]'}`,
+    surface: isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-[#e2e8f0]',
+    surface2:isDark?'bg-[#1a2332]':'bg-[#f4f7fb]',
+    border:  isDark?'border-[#1e2d40]':'border-[#e2e8f0]',
+    muted:   isDark?'text-[#6b7fa3]':'text-[#64748b]',
+    faint:   isDark?'bg-[#0f1620]':'bg-[#eef2f7]',
+    accent:  isDark?'text-[#3b82f6]':'text-[#2563eb]',
+    accentBg:isDark?'bg-[#3b82f6]':'bg-[#2563eb]',
+  };
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">{company.name}</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Payroll dashboard · Fiscal 2026 &nbsp;·&nbsp; <span className="text-blue-400 text-xs font-mono">{new Date().toLocaleTimeString('en-CA')}</span></p>
-        </div>
-        <button onClick={() => setPage("run")} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">
-          <PlayCircle size={15} /> Run Payroll
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={DollarSign} label="Total Payroll YTD" value={loading ? "…" : `$${ytdGross.toLocaleString(undefined,{maximumFractionDigits:0})}`} sub={`${recentRuns.length} run${recentRuns.length!==1?'s':''} this year`} color="blue" />
-        <StatCard icon={Users} label="Active Employees" value={loading ? "…" : emps.length} sub={company.name} color="green" />
-        <StatCard icon={Calendar} label="Next Pay Date" value={getNextPayDate()} sub={freq} color="amber" />
-        <StatCard icon={AlertCircle} label="CRA Remittance" value="Up to date" sub="Payroll source deductions" color="green" />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-800">Payroll Trend</h3>
-            <Badge color="blue">2026</Badge>
+    <div className={s.wrap}>
+      {/* ── Topbar ── */}
+      <div className={`flex items-center justify-between px-5 py-3 border-b ${s.surface} border sticky top-0 z-10`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-7 h-7 ${s.accentBg} rounded-lg flex items-center justify-center text-white font-bold text-xs`}>P</div>
+          <div>
+            <div className="font-semibold text-sm leading-tight">{company.name}</div>
+            <div className={`text-xs ${s.muted}`}>Fiscal 2026 · {getNextPayDate()}</div>
           </div>
-          {trendData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={trendData}>
-                <defs>
-                  <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-                <Tooltip formatter={v => [`$${Number(v).toLocaleString()}`, "Gross Payroll"]} contentStyle={{ borderRadius: 10, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,.08)", fontSize: 12 }} />
-                <Area type="monotone" dataKey="gross" stroke="#2563eb" strokeWidth={2} fill="url(#g1)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-44 flex flex-col items-center justify-center text-center">
-              <BarChart2 size={32} className="text-gray-200 mb-2" />
-              <p className="text-sm text-gray-400">No payroll runs yet</p>
-              <p className="text-xs text-gray-300 mt-1">Run your first payroll to see the trend</p>
-              <button onClick={() => setPage("run")} className="mt-3 px-4 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 transition-colors">Run Payroll</button>
-            </div>
-          )}
-        </Card>
-        <Card className="p-5">
-          <h3 className="text-sm font-semibold text-gray-800 mb-4">Quick Actions</h3>
-          <div className="space-y-1">
-            {[
-              { label: "Run Payroll", icon: PlayCircle, page: "run", color: "text-blue-600", bg: "hover:bg-blue-50" },
-              { label: "Add Employee", icon: Users, page: "employees", color: "text-emerald-600", bg: "hover:bg-emerald-50" },
-              { label: "View Paystubs", icon: FileText, page: "stubs", color: "text-purple-600", bg: "hover:bg-purple-50" },
-              { label: "Payroll History", icon: History, page: "history", color: "text-amber-600", bg: "hover:bg-amber-50" },
-              { label: "Reports", icon: BarChart2, page: "reports", color: "text-indigo-600", bg: "hover:bg-indigo-50" },
-              { label: "Company Settings", icon: Settings, page: "settings", color: "text-gray-600", bg: "hover:bg-gray-50" },
-            ].map(a => (
-              <button key={a.label} onClick={() => setPage(a.page)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl ${a.bg} transition-colors text-left`}>
-                <a.icon size={16} className={a.color} />
-                <span className="text-sm text-gray-700">{a.label}</span>
-                <ChevronRight size={14} className="ml-auto text-gray-300" />
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center text-xs ${s.muted} gap-2 px-3 py-1.5 rounded-lg border ${s.border} ${s.surface2}`}>
+            <Calendar size={12}/> Period 11 · May 25 – Jun 7
+          </div>
+          {/* Theme toggle */}
+          <div className={`flex items-center rounded-xl border ${s.border} ${s.surface2} p-1 gap-1`}>
+            {[['light','☀️ Light'],['dark','🌙 Dark']].map(([t,label])=>(
+              <button key={t} onClick={()=>switchTheme(t)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${theme===t?(isDark?'bg-[#1e2d40] text-[#e8f0fe]':'bg-white text-[#0f172a] shadow-sm border border-[#e2e8f0]'):s.muted}`}>
+                {label}
               </button>
             ))}
           </div>
-        </Card>
+          <button onClick={()=>setPage("run")} className={`flex items-center gap-1.5 px-3 py-1.5 ${s.accentBg} text-white rounded-xl text-xs font-medium hover:opacity-90 transition-opacity`}>
+            <PlayCircle size={13}/> Run Payroll
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-800">Recent Payroll Runs</h3>
-            <button onClick={() => setPage("history")} className="text-xs text-blue-600 hover:underline">View all</button>
-          </div>
-          {recentRuns.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <History size={32} className="text-gray-200 mb-2" />
-              <p className="text-sm text-gray-400">No payroll runs yet</p>
-              <button onClick={() => setPage("run")} className="mt-3 px-4 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 transition-colors">Run First Payroll</button>
+      <div className="p-5 space-y-5">
+        {/* ── KPI Row ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label:'YTD Gross Payroll', value: loading?'…':`$${ytdGross.toLocaleString(undefined,{maximumFractionDigits:0})}`, sub: delta?<span className={+delta>=0?'text-emerald-500':'text-red-400'}>{+delta>=0?'↑':'↓'}{Math.abs(+delta)}% vs prev</span>:`${recentRuns.length} runs`, color:'#3b82f6' },
+            { label:'Net Paid Out',      value: loading?'…':`$${ytdNet.toLocaleString(undefined,{maximumFractionDigits:0})}`,   sub:<span className={s.muted}>after all deductions</span>, color:'#10b981' },
+            { label:'Active Employees',  value: loading?'…':emps.length, sub:<span className={s.muted}>{emps.filter(e=>e.type==='Salary').length} salary · {emps.filter(e=>e.type==='Hourly').length} hourly</span>, color:'#06b6d4' },
+            { label:'Next Pay Date',     value: getNextPayDate(), sub:<span className={`text-xs px-2 py-0.5 rounded-full ${isDark?'bg-blue-900/40 text-blue-300':'bg-blue-50 text-blue-600'}`}>{freq}</span>, color:'#8b5cf6' },
+          ].map(k=>(
+            <div key={k.label} className={`rounded-xl border p-4 ${s.surface} relative overflow-hidden cursor-pointer hover:border-blue-500 transition-colors`}>
+              <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{background:k.color}}/>
+              <div className={`text-xs uppercase tracking-wide font-medium mb-2 ${s.muted}`}>{k.label}</div>
+              <div className="text-2xl font-bold leading-none mb-1.5" style={{fontFamily:'Space Grotesk,system-ui'}}>{k.value}</div>
+              <div className="text-xs">{k.sub}</div>
             </div>
-          ) : (
-            <div className="space-y-2">
-              {recentRuns.slice(0,4).map(p => (
-                <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{p.period}</p>
-                    <p className="text-xs text-gray-400">{p.pay_date} · {p.employees} employee{p.employees!==1?'s':''}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-gray-900">${Number(p.net).toLocaleString(undefined,{maximumFractionDigits:0})}</p>
-                    <Badge color="green">Completed</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+          ))}
+        </div>
 
-        <Card className="p-5">
-          <h3 className="text-sm font-semibold text-gray-800 mb-4">All Clients Overview</h3>
-          {companies.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <Building2 size={32} className="text-gray-200 mb-2" />
-              <p className="text-sm text-gray-400">No other companies yet</p>
+        {/* ── Row 1: Trend + Donut ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className={`lg:col-span-2 rounded-xl border p-4 ${s.surface}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-sm font-semibold">Payroll trend</div>
+                <div className={`text-xs ${s.muted}`}>Monthly gross & net · 2026</div>
+              </div>
+              <div className={`flex gap-1 p-1 rounded-lg border ${s.border} ${s.surface2}`}>
+                {[['both','Both'],['gross','Gross'],['net','Net'],['ded','Deductions']].map(([v,l])=>(
+                  <button key={v} onClick={()=>setActiveView(v)}
+                    className={`px-2 py-1 rounded-md text-xs transition-all ${activeView===v?(isDark?'bg-[#1e2d40] text-white':'bg-white shadow text-gray-900 border border-gray-200'):s.muted}`}>{l}</button>
+                ))}
+              </div>
             </div>
-          ) : (
-            <div className="space-y-1">
-              {companies.map(c => (
-                <div key={c.id} onClick={() => { setSelectedCompany(c); setPage("dashboard"); }}
-                  className={`flex items-center justify-between py-2.5 px-2 rounded-xl cursor-pointer transition-colors hover:bg-gray-50 ${c.id===company.id?"bg-blue-50":""}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${c.id===company.id?"bg-blue-600 text-white":"bg-blue-50 text-blue-600"}`}>{c.name[0]}</div>
+            <div style={{position:'relative',height:'180px'}}>
+              <canvas ref={trendRef} role="img" aria-label="Payroll trend line chart showing monthly gross and net payroll"/>
+            </div>
+            <div className="flex gap-4 mt-2">
+              {(activeView==='both'||activeView==='gross')&&<span className={`flex items-center gap-1.5 text-xs ${s.muted}`}><span className="w-2.5 h-0.5 bg-blue-500 inline-block rounded"/>Gross</span>}
+              {(activeView==='both'||activeView==='net')&&<span className={`flex items-center gap-1.5 text-xs ${s.muted}`}><span className="w-2.5 h-0.5 bg-emerald-500 inline-block rounded"/>Net</span>}
+              {activeView==='ded'&&<span className={`flex items-center gap-1.5 text-xs ${s.muted}`}><span className="w-2.5 h-0.5 bg-amber-500 inline-block rounded"/>Deductions</span>}
+              <span className={`ml-auto text-xs ${s.muted}`}>Total: ${ytdGross.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+            </div>
+          </div>
+
+          <div className={`rounded-xl border p-4 ${s.surface}`}>
+            <div className="text-sm font-semibold mb-1">Deduction split</div>
+            <div className={`text-xs ${s.muted} mb-3`}>YTD breakdown</div>
+            <div className="flex h-2 rounded-full overflow-hidden gap-0.5 mb-3">
+              {segData.map(s=>(<div key={s.label} style={{flex:s.val||0.01,background:s.color}} title={`${s.label}: ${s.pct}%`}/>))}
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3">
+              {segData.map(d=>(<div key={d.label} className={`flex items-center gap-1 text-xs ${s.muted}`}><span className="w-2 h-2 rounded-sm inline-block flex-shrink-0" style={{background:d.color}}/>{d.label}: {d.pct}%</div>))}
+            </div>
+            <div style={{position:'relative',height:'130px'}}>
+              <canvas ref={donutRef} role="img" aria-label="Donut chart showing CPP EI federal and provincial tax deduction proportions"/>
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+              {segData.map(d=>(<div key={d.label} className={`flex items-center gap-1 text-xs ${s.muted}`}><span className="w-2 h-2 rounded-sm inline-block flex-shrink-0" style={{background:d.color}}/>${d.val.toFixed(0)}</div>))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Row 2: Bar + YTD Progress ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className={`lg:col-span-2 rounded-xl border p-4 ${s.surface}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-sm font-semibold">Pay distribution</div>
+                <div className={`text-xs ${s.muted}`}>Per-employee YTD comparison</div>
+              </div>
+              <div className={`flex gap-1 p-1 rounded-lg border ${s.border} ${s.surface2}`}>
+                {[['gross','Gross'],['net','Net'],['cpp','CPP'],['ei','EI']].map(([v,l])=>(
+                  <button key={v} onClick={()=>setActiveBar(v)}
+                    className={`px-2 py-1 rounded-md text-xs transition-all ${activeBar===v?(isDark?'bg-[#1e2d40] text-white':'bg-white shadow text-gray-900 border border-gray-200'):s.muted}`}>{l}</button>
+                ))}
+              </div>
+            </div>
+            {emps.length > 0 ? (
+              <div style={{position:'relative',height:'150px'}}>
+                <canvas ref={barRef} role="img" aria-label="Horizontal bar chart comparing per-employee payroll amounts"/>
+              </div>
+            ) : (
+              <div className={`flex flex-col items-center justify-center h-36 text-center ${s.muted}`}>
+                <Users size={28} className="mb-2 opacity-30"/>
+                <p className="text-sm">No employee data yet</p>
+              </div>
+            )}
+          </div>
+
+          <div className={`rounded-xl border p-4 ${s.surface}`}>
+            <div className="text-sm font-semibold mb-1">YTD limits</div>
+            <div className={`text-xs ${s.muted} mb-4`}>CRA contribution progress</div>
+            {[
+              { label:'CPP contributions', val:`$${ytdCPP.toFixed(0)}`, pct:cppPct,  color:'#3b82f6', hint:'Max $4,230.45' },
+              { label:'EI premiums',       val:`$${ytdEI.toFixed(0)}`,  pct:eiPct,   color:'#06b6d4', hint:'Max $1,123.07' },
+              { label:'Federal tax',       val:`$${ytdFed.toFixed(0)}`, pct:fedPct,  color:'#f59e0b', hint:'YTD withheld' },
+              { label:'Periods done',      val:`${recentRuns.length}/26`, pct:runsPct, color:'#10b981', hint:'Bi-weekly 2026' },
+            ].map(p=>(
+              <div key={p.label} className="mb-3">
+                <div className="flex justify-between text-xs mb-1">
+                  <span className={s.muted}>{p.label}</span>
+                  <span className="font-medium">{p.val}</span>
+                </div>
+                <div className={`h-1.5 rounded-full overflow-hidden ${isDark?'bg-[#1a2332]':'bg-gray-100'}`}>
+                  <div className="h-full rounded-full transition-all duration-1000" style={{width:`${p.pct}%`,background:p.color}}/>
+                </div>
+                <div className={`text-xs mt-0.5 ${s.muted}`}>{p.hint}</div>
+              </div>
+            ))}
+            <div className={`mt-3 p-3 rounded-xl border-l-2 border-blue-500 ${isDark?'bg-[#0f1620]':'bg-blue-50'}`}>
+              <div className={`text-xs font-semibold ${s.accent} mb-1`}>CRA remittance owing</div>
+              <div className="text-lg font-bold" style={{fontFamily:'Space Grotesk,system-ui'}}>${remitTotal.toFixed(2)}</div>
+              <div className={`text-xs ${s.muted}`}>Employee + Employer CPP & EI + tax</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Row 3: Runs + Employees + Companies ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className={`rounded-xl border p-4 ${s.surface}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold">Recent runs</div>
+              <button onClick={()=>setPage("history")} className={`text-xs ${s.accent} hover:underline`}>View all</button>
+            </div>
+            {recentRuns.length===0?(
+              <div className={`flex flex-col items-center justify-center py-8 text-center ${s.muted}`}>
+                <History size={28} className="mb-2 opacity-30"/>
+                <p className="text-sm mb-3">No runs yet</p>
+                <button onClick={()=>setPage("run")} className={`px-3 py-1.5 ${s.accentBg} text-white rounded-xl text-xs font-medium hover:opacity-90`}>Run Payroll</button>
+              </div>
+            ):(
+              <div className="space-y-0">
+                {recentRuns.slice(0,4).map(p=>(
+                  <div key={p.id} className={`flex items-center justify-between py-2.5 border-b ${s.border} last:border-0`}>
                     <div>
-                      <p className="text-sm font-medium text-gray-800">{c.name}</p>
-                      <p className="text-xs text-gray-400">{c.province}</p>
+                      <div className="text-xs font-medium leading-tight">{p.period}</div>
+                      <div className={`text-xs ${s.muted}`}>{p.pay_date} · {p.employees} emp</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold" style={{fontFamily:'Space Grotesk,system-ui'}}>${Number(p.net).toLocaleString(undefined,{maximumFractionDigits:0})}</div>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${isDark?'bg-emerald-900/40 text-emerald-400':'bg-emerald-50 text-emerald-700'}`}>Done</span>
                     </div>
                   </div>
-                  {c.id === company.id
-                    ? <Badge color="blue">Current</Badge>
-                    : <ChevronRight size={14} className="text-gray-300" />
-                  }
-                </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className={`rounded-xl border p-4 ${s.surface}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold">Employees</div>
+              <button onClick={()=>setPage("employees")} className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border ${s.border} ${s.muted} hover:${s.accent} transition-colors`}><Plus size={11}/>Add</button>
+            </div>
+            {emps.length===0?(
+              <div className={`flex flex-col items-center justify-center py-8 text-center ${s.muted}`}>
+                <Users size={28} className="mb-2 opacity-30"/>
+                <p className="text-sm">No employees</p>
+              </div>
+            ):(
+              <div className="space-y-0">
+                {emps.slice(0,5).map((e,i)=>(
+                  <div key={e.id} className={`flex items-center gap-2.5 py-2 border-b ${s.border} last:border-0`}>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 ${AV_BG[i%5]} ${AV_TX[i%5]}`}>
+                      {e.name.split(' ').map(n=>n[0]).join('').slice(0,2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium truncate">{e.name}</div>
+                      <div className={`text-xs ${s.muted}`}>{e.payroll_schedule||'Bi-weekly'}</div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-xs font-semibold">${Number(e.rate).toLocaleString()}</div>
+                      <div className={`text-xs ${s.muted}`}>{e.type==='Salary'?'/yr':'/hr'}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className={`rounded-xl border p-4 ${s.surface}`}>
+            <div className="text-sm font-semibold mb-3">Quick actions</div>
+            <div className="space-y-1 mb-4">
+              {[
+                {label:"Run Payroll",    icon:PlayCircle, page:"run",      color:"text-blue-500",   bg:isDark?"hover:bg-blue-900/20":"hover:bg-blue-50"},
+                {label:"Add Employee",   icon:Users,      page:"employees",color:"text-emerald-500", bg:isDark?"hover:bg-emerald-900/20":"hover:bg-emerald-50"},
+                {label:"View Paystubs",  icon:FileText,   page:"stubs",    color:"text-purple-500",  bg:isDark?"hover:bg-purple-900/20":"hover:bg-purple-50"},
+                {label:"Payroll History",icon:History,    page:"history",  color:"text-amber-500",   bg:isDark?"hover:bg-amber-900/20":"hover:bg-amber-50"},
+                {label:"Reports",        icon:BarChart2,  page:"reports",  color:"text-indigo-500",  bg:isDark?"hover:bg-indigo-900/20":"hover:bg-indigo-50"},
+                {label:"Settings",       icon:Settings,   page:"settings", color:s.muted,            bg:isDark?"hover:bg-white/5":"hover:bg-gray-50"},
+              ].map(a=>(
+                <button key={a.label} onClick={()=>setPage(a.page)} className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl ${a.bg} transition-colors text-left`}>
+                  <a.icon size={14} className={a.color}/>
+                  <span className="text-xs">{a.label}</span>
+                  <ChevronRight size={12} className={`ml-auto ${s.muted}`}/>
+                </button>
               ))}
             </div>
-          )}
-        </Card>
-      </div>
-
-      {emps.length > 0 && (
-        <Card className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-800">Active Employees</h3>
-            <button onClick={() => setPage("employees")} className="text-xs text-blue-600 hover:underline">Manage</button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {emps.map(e => (
-              <div key={e.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold text-blue-700">{e.name.split(" ").map(n=>n[0]).join("")}</div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{e.name}</p>
-                  <p className="text-xs text-gray-400">{e.type === "Salary" ? `$${Number(e.rate).toLocaleString()}/yr` : `$${e.rate}/hr`} · {e.payroll_schedule || "Bi-weekly"}</p>
-                </div>
+            <div className="text-sm font-semibold mb-2">All companies</div>
+            {companies.map(c=>(
+              <div key={c.id} onClick={()=>{setSelectedCompany(c);setPage("dashboard");}}
+                className={`flex items-center gap-2 px-2 py-2 rounded-xl cursor-pointer transition-colors mb-1 ${c.id===company.id?(isDark?'bg-blue-900/30':'bg-blue-50'):(isDark?'hover:bg-white/5':'hover:bg-gray-50')}`}>
+                <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0 ${c.id===company.id?`${s.accentBg} text-white`:(isDark?'bg-blue-900/40 text-blue-400':'bg-blue-50 text-blue-600')}`}>{c.name[0]}</div>
+                <span className="text-xs font-medium truncate">{c.name}</span>
+                {c.id===company.id&&<span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${isDark?'bg-blue-900/40 text-blue-400':'bg-blue-100 text-blue-700'}`}>Active</span>}
               </div>
             ))}
           </div>
-        </Card>
-      )}
-    </div>
+        </div>
+      </div>
+
+      </div>
   );
 }
 
