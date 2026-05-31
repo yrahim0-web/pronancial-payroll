@@ -103,7 +103,7 @@ const PROV_TAX = {
       { min: 150000, max: 220000,  rate: 0.1216, base: 12447.72 },
       { min: 220000, max: Infinity,rate: 0.1316, base: 23967.72 },
     ],
-    bpa: 12989,
+    bpa: 12399,
     surtax: true,
   },
   BC: {
@@ -296,14 +296,28 @@ function calcPayroll(
   // T4127 Step 3: T1 = T3 - K1 - K2 - K3 - K4
   const T1 = calcBracketTax(annualTaxable, FED_BRACKETS);
   // T4127 Step 3 — exact formula: T1 = T3 - K1 - K2 - K3 - K4
-  const K1 = 0.14 * td1Fed;
-  const K2 = 0.14 * (annualCPP + annualCPP2);
+  // T4127 2026 BPAF formula — income tested
+  let bpaf = td1Fed; // use employee's TD1 claim
+  if (annualGross <= 177882) {
+    bpaf = 16452;
+  } else if (annualGross >= 253414) {
+    bpaf = 15705;
+  } else {
+    bpaf = 16452 - (16452 - 15705) * (annualGross - 177882) / (253414 - 177882);
+  }
+  // Override with employee's TD1 if they claimed a specific amount
+  if (td1Fed !== 16452) bpaf = td1Fed;
+
+  const K1 = 0.14 * bpaf;
+  const K2 = 0.15 * annualCPP + 0.15 * annualCPP2; // CPP credit rate is 15% per T4127
   const K3 = 0.14 * annualEI;
-  const K4 = 0.14 * Math.min(annualGross, 1433);
+  // CEA applies to employment income only (base earnings × PP, not including vac pay)
+  const annualBaseOnly = baseEarnings * PP;
+  const K4 = 0.14 * Math.min(annualBaseOnly, 1433);
   const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
   const annualFedTax    = Math.round(annualFedTaxRaw);
   const periodFedTax    = +(annualFedTax / PP).toFixed(2);
-
+  
   // ── Step 5: Provincial Tax (T4127 Section D) ─────────────────────────────────
   const provBPA        = td1Prov ?? provData.bpa;
   const provLowestRate = provData.brackets[0]?.rate || 0.0505;
@@ -317,16 +331,17 @@ function calcPayroll(
     annualProvTax += calcONSurtax(annualProvTax);
   }
 
-  // Ontario health premium 2026 (included in provincial tax per CRA T4032)
+  // Ontario Health Premium 2026 — IS withheld via payroll per T4032
   if (province === "ON") {
     let ohp = 0;
-    const ai = annualTaxable;
+    const ai = annualGross;
     if      (ai <= 20000)  ohp = 0;
-    else if (ai <= 36000)  ohp = Math.min(300,  0.06  * (ai - 20000));
+    else if (ai <= 36000)  ohp = Math.min(300,  0.06 * (ai - 20000));
     else if (ai <= 48000)  ohp = Math.min(450,  300 + 0.06 * (ai - 36000));
-    else if (ai <= 72000)  ohp = Math.min(600,  450 + 0.25 * (ai - 48000));
-    else if (ai <= 200000) ohp = Math.min(750,  600 + 0.25 * (ai - 72000));
-    else                   ohp = Math.min(900,  750 + 0.25 * (ai - 200000));
+    else if (ai <= 72000)  ohp = Math.min(600,  450 + 0.06 * (ai - 48000));
+    else if (ai <= 200000) ohp = Math.min(750,  600 + 0.06 * (ai - 72000));
+    else if (ai <= 200600) ohp = Math.min(900,  750 + 0.25 * (ai - 200000));
+    else                   ohp = 900;
     annualProvTax += ohp;
   }
 
@@ -542,57 +557,110 @@ function LoginPage({ onLogin }) {
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────
 function Dashboard({ company, companies, setPage, setSelectedCompany }) {
-  const emps = EMPLOYEES_BY_COMPANY[company.id] || [];
+  const [emps, setEmps] = useState([]);
+  const [recentRuns, setRecentRuns] = useState([]);
+  const [trendData, setTrendData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const [{ data: empData }, { data: runData }] = await Promise.all([
+        supabase.from('employees').select('*').eq('company_id', company.id).eq('status', 'active'),
+        supabase.from('payroll_runs').select('*').eq('company_id', company.id).order('created_at', { ascending: false }).limit(6),
+      ]);
+      if (empData) setEmps(empData);
+      if (runData) {
+        setRecentRuns(runData);
+        // Build trend from real runs — group by month
+        const byMonth = {};
+        runData.forEach(r => {
+          const d = new Date(r.pay_date || r.created_at);
+          const key = d.toLocaleString('default', { month: 'short' });
+          byMonth[key] = (byMonth[key] || 0) + (+r.gross || 0);
+        });
+        setTrendData(Object.entries(byMonth).reverse().map(([month, gross]) => ({ month, gross })));
+      }
+      setLoading(false);
+    };
+    load();
+  }, [company.id]);
+
+  const ytdGross = recentRuns.reduce((a, r) => a + (+r.gross || 0), 0);
+  const lastRun = recentRuns[0];
+  const nextPayDate = company.next_payroll || company.nextPayroll || '—';
+  const freq = company.payroll_freq || 'Bi-weekly';
+
+  // Next payroll date: find next upcoming period
+  const getNextPayDate = () => {
+    const allPeriods = getPeriodList(freq);
+    const today = new Date();
+    const next = allPeriods.find(p => new Date(p.payDate) >= today);
+    return next ? next.payDate : '—';
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">{company.name}</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Payroll dashboard · Fiscal 2025</p>
+          <p className="text-sm text-gray-400 mt-0.5">Payroll dashboard · Fiscal 2026</p>
         </div>
         <button onClick={() => setPage("run")} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">
           <PlayCircle size={15} /> Run Payroll
         </button>
       </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={DollarSign} label="Total Payroll (May)" value="$36,400" sub="+5.2% vs last month" color="blue" />
-        <StatCard icon={Users} label="Active Employees" value={emps.filter(e=>e.status==="active").length} sub={`${company.name}`} color="green" />
-        <StatCard icon={Calendar} label="Next Payroll" value="Jun 15" sub="Semi-monthly" color="amber" />
-        <StatCard icon={AlertCircle} label="CRA Remittance" value={company.remittance === "overdue" ? "Overdue" : company.remittance === "due" ? "Due Jun 15" : "Up to date"} sub="Payroll source deductions" color={company.remittance === "overdue" ? "red" : company.remittance === "due" ? "amber" : "green"} />
+        <StatCard icon={DollarSign} label="Total Payroll YTD" value={loading ? "…" : `$${ytdGross.toLocaleString(undefined,{maximumFractionDigits:0})}`} sub={`${recentRuns.length} run${recentRuns.length!==1?'s':''} this year`} color="blue" />
+        <StatCard icon={Users} label="Active Employees" value={loading ? "…" : emps.length} sub={company.name} color="green" />
+        <StatCard icon={Calendar} label="Next Pay Date" value={getNextPayDate()} sub={freq} color="amber" />
+        <StatCard icon={AlertCircle} label="CRA Remittance" value="Up to date" sub="Payroll source deductions" color="green" />
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-800">Payroll Trend</h3>
-            <Badge color="blue">2025</Badge>
+            <Badge color="blue">2026</Badge>
           </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={PAYROLL_TREND}>
-              <defs>
-                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => `$${v/1000}k`} />
-              <Tooltip formatter={v => [`$${v.toLocaleString()}`, "Gross Payroll"]} contentStyle={{ borderRadius: 10, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,.08)", fontSize: 12 }} />
-              <Area type="monotone" dataKey="gross" stroke="#2563eb" strokeWidth={2} fill="url(#g1)" />
-            </AreaChart>
-          </ResponsiveContainer>
+          {trendData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={trendData}>
+                <defs>
+                  <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
+                <Tooltip formatter={v => [`$${Number(v).toLocaleString()}`, "Gross Payroll"]} contentStyle={{ borderRadius: 10, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,.08)", fontSize: 12 }} />
+                <Area type="monotone" dataKey="gross" stroke="#2563eb" strokeWidth={2} fill="url(#g1)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-44 flex flex-col items-center justify-center text-center">
+              <BarChart2 size={32} className="text-gray-200 mb-2" />
+              <p className="text-sm text-gray-400">No payroll runs yet</p>
+              <p className="text-xs text-gray-300 mt-1">Run your first payroll to see the trend</p>
+              <button onClick={() => setPage("run")} className="mt-3 px-4 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 transition-colors">Run Payroll</button>
+            </div>
+          )}
         </Card>
         <Card className="p-5">
           <h3 className="text-sm font-semibold text-gray-800 mb-4">Quick Actions</h3>
-          <div className="space-y-2">
+          <div className="space-y-1">
             {[
-              { label: "Run Payroll", icon: PlayCircle, page: "run", color: "text-blue-600" },
-              { label: "Add Employee", icon: Users, page: "employees", color: "text-emerald-600" },
-              { label: "View Reports", icon: BarChart2, page: "reports", color: "text-purple-600" },
-              { label: "Payroll History", icon: History, page: "history", color: "text-amber-600" },
-              { label: "Company Settings", icon: Settings, page: "settings", color: "text-gray-600" },
+              { label: "Run Payroll", icon: PlayCircle, page: "run", color: "text-blue-600", bg: "hover:bg-blue-50" },
+              { label: "Add Employee", icon: Users, page: "employees", color: "text-emerald-600", bg: "hover:bg-emerald-50" },
+              { label: "View Paystubs", icon: FileText, page: "stubs", color: "text-purple-600", bg: "hover:bg-purple-50" },
+              { label: "Payroll History", icon: History, page: "history", color: "text-amber-600", bg: "hover:bg-amber-50" },
+              { label: "Reports", icon: BarChart2, page: "reports", color: "text-indigo-600", bg: "hover:bg-indigo-50" },
+              { label: "Company Settings", icon: Settings, page: "settings", color: "text-gray-600", bg: "hover:bg-gray-50" },
             ].map(a => (
-              <button key={a.label} onClick={() => setPage(a.page)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors text-left">
+              <button key={a.label} onClick={() => setPage(a.page)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl ${a.bg} transition-colors text-left`}>
                 <a.icon size={16} className={a.color} />
                 <span className="text-sm text-gray-700">{a.label}</span>
                 <ChevronRight size={14} className="ml-auto text-gray-300" />
@@ -601,47 +669,86 @@ function Dashboard({ company, companies, setPage, setSelectedCompany }) {
           </div>
         </Card>
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-800">Recent Payroll Runs</h3>
-            <button onClick={()=>setPage("history")} className="text-xs text-blue-600 hover:underline">View all</button>
+            <button onClick={() => setPage("history")} className="text-xs text-blue-600 hover:underline">View all</button>
           </div>
-          <div className="space-y-3">
-            {PAYROLL_HISTORY.slice(0,3).map(p => (
-              <div key={p.id} className="flex items-center justify-between py-2 border-b border-gray-50">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{p.period}</p>
-                  <p className="text-xs text-gray-400">{p.date} · {p.employees} employees</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-gray-900">${p.net.toLocaleString()}</p>
-                  <Badge color="green">Completed</Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card className="p-5">
-          <h3 className="text-sm font-semibold text-gray-800 mb-4">All Clients Overview</h3>
-          <div className="space-y-3">
-            {companies.map(c => (
-              <div key={c.id} onClick={() => { setSelectedCompany(c); setPage("dashboard"); }} className="flex items-center justify-between py-2 border-b border-gray-50 cursor-pointer hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-xs font-bold text-blue-600">{c.name[0]}</div>
+          {recentRuns.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <History size={32} className="text-gray-200 mb-2" />
+              <p className="text-sm text-gray-400">No payroll runs yet</p>
+              <button onClick={() => setPage("run")} className="mt-3 px-4 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 transition-colors">Run First Payroll</button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {recentRuns.slice(0,4).map(p => (
+                <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{c.name}</p>
-                    <p className="text-xs text-gray-400">{c.employees} employees · {c.province}</p>
+                    <p className="text-sm font-medium text-gray-800">{p.period}</p>
+                    <p className="text-xs text-gray-400">{p.pay_date} · {p.employees} employee{p.employees!==1?'s':''}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-gray-900">${Number(p.net).toLocaleString(undefined,{maximumFractionDigits:0})}</p>
+                    <Badge color="green">Completed</Badge>
                   </div>
                 </div>
-                <Badge color={c.remittance === "overdue" ? "red" : c.remittance === "due" ? "yellow" : "green"}>
-                  {c.remittance === "overdue" ? "Overdue" : c.remittance === "due" ? "Due soon" : "Current"}
-                </Badge>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold text-gray-800 mb-4">All Clients Overview</h3>
+          {companies.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <Building2 size={32} className="text-gray-200 mb-2" />
+              <p className="text-sm text-gray-400">No other companies yet</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {companies.map(c => (
+                <div key={c.id} onClick={() => { setSelectedCompany(c); setPage("dashboard"); }}
+                  className={`flex items-center justify-between py-2.5 px-2 rounded-xl cursor-pointer transition-colors hover:bg-gray-50 ${c.id===company.id?"bg-blue-50":""}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${c.id===company.id?"bg-blue-600 text-white":"bg-blue-50 text-blue-600"}`}>{c.name[0]}</div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{c.name}</p>
+                      <p className="text-xs text-gray-400">{c.province}</p>
+                    </div>
+                  </div>
+                  {c.id === company.id
+                    ? <Badge color="blue">Current</Badge>
+                    : <ChevronRight size={14} className="text-gray-300" />
+                  }
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {emps.length > 0 && (
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-800">Active Employees</h3>
+            <button onClick={() => setPage("employees")} className="text-xs text-blue-600 hover:underline">Manage</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {emps.map(e => (
+              <div key={e.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold text-blue-700">{e.name.split(" ").map(n=>n[0]).join("")}</div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{e.name}</p>
+                  <p className="text-xs text-gray-400">{e.type === "Salary" ? `$${Number(e.rate).toLocaleString()}/yr` : `$${e.rate}/hr`} · {e.payroll_schedule || "Bi-weekly"}</p>
+                </div>
               </div>
             ))}
           </div>
         </Card>
-      </div>
+      )}
     </div>
   );
 }
@@ -798,7 +905,7 @@ useEffect(() => {
           hire_date: form.hireDate,
           position: form.position || "Employee",
           td1_fed: parseFloat(form.td1Fed) || 16452,
-          td1_prov: parseFloat(form.td1Prov) || 12989,
+          td1_prov: parseFloat(form.td1Prov) || 12399,
           vac_rate: (form.vacRate || "4") + "%",
           payroll_schedule: form.paySchedule || "Semi-monthly",
         })
@@ -895,7 +1002,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?e.rate:"", rate: e.type==="Hourly"?e.rate:"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||12989), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%","") }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?e.rate:"", rate: e.type==="Hourly"?e.rate:"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||12399), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%","") }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -1134,14 +1241,15 @@ const [saving, setSaving] = useState(false);
 const [showPreview, setShowPreview] = useState(false); 
   const [period] = useState("Jun 1–15, 2025");
 
-  const rows = emps.map(e => {
+  const filteredEmps = emps.filter(e => (e.payroll_schedule || "Bi-weekly") === selectedFreq);
+
+  const rows = filteredEmps.map(e => {
     const defaultReg = e.type === "Salary" ? "80" : "0";
     const defaultVac = (e.vac_rate || "4%").replace("%","");
     const h = hours[e.id] || { reg: defaultReg, ot:"0", stat:"0", bonus:"0", vacRate: defaultVac + "%" };
     const fedTD1 = (!e.td1_fed || e.td1_fed === 15705) ? 16452 : e.td1_fed;
-const provTD1 = (!e.td1_prov || e.td1_prov === 0) ? 12989 : e.td1_prov;
-const empFreq = e.payroll_schedule || "Bi-weekly";
-return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04, empFreq, fedTD1, provTD1), ...h };
+    const provTD1 = (!e.td1_prov || e.td1_prov === 0) ? 12399 : e.td1_prov;
+    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04, selectedFreq, fedTD1, provTD1), ...h };
   });
 
   const totals = rows.reduce((a, r) => ({
@@ -1215,12 +1323,24 @@ return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRa
                       <div><p className="font-medium text-gray-900 whitespace-nowrap">{e.name}</p><p className="text-xs text-gray-400">{e.type==="Salary"?`${e.rate.toLocaleString()}/yr`:`${e.rate}/hr`}</p></div>
                     </div>
                   </td>
-                  {["reg","ot","stat","bonus"].map(field => (
-                    <td key={field} className="px-3 py-3">
-                      <input type="number" min="0" value={hours[e.id]?.[field]||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), [field]:ev.target.value}}))}
-                        className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
-                    </td>
-                  ))}
+                  {e.type === "Salary" ? (
+                    <>
+                      <td className="px-3 py-3 text-xs text-gray-400 italic">—</td>
+                      <td className="px-3 py-3 text-xs text-gray-400 italic">—</td>
+                      <td className="px-3 py-3 text-xs text-gray-400 italic">—</td>
+                      <td className="px-3 py-3">
+                        <input type="number" min="0" value={hours[e.id]?.bonus||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), bonus:ev.target.value}}))}
+                          className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
+                      </td>
+                    </>
+                  ) : (
+                    ["reg","ot","stat","bonus"].map(field => (
+                      <td key={field} className="px-3 py-3">
+                        <input type="number" min="0" value={hours[e.id]?.[field]||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), [field]:ev.target.value}}))}
+                          className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
+                      </td>
+                    ))
+                  )}
                   <td className="px-3 py-3">
                     <select value={hours[e.id]?.vacRate||"4%"} onChange={ev=>setHours(p=>({...p,[e.id]:{...(p[e.id]||{}),vacRate:ev.target.value}}))}
                       disabled={processed} className="w-16 px-1 py-1 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-400">
