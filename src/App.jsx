@@ -97,13 +97,13 @@ const FED_EI_CREDIT_RATE  = 0.14;
 const PROV_TAX = {
   ON: {
     brackets: [
-      { min: 0,      max: 52886,   rate: 0.0505, base: 0        },
-      { min: 52886,  max: 105775,  rate: 0.0915, base: 2670.74  },
-      { min: 105775, max: 150000,  rate: 0.1116, base: 7514.86  },
-      { min: 150000, max: 220000,  rate: 0.1216, base: 12447.72 },
-      { min: 220000, max: Infinity,rate: 0.1316, base: 23967.72 },
+      { min: 0,      max: 53891,   rate: 0.0505, base: 0        },
+      { min: 53891,  max: 107785,  rate: 0.0915, base: 2721.50  },
+      { min: 107785, max: 150000,  rate: 0.1116, base: 7652.80  },
+      { min: 150000, max: 220000,  rate: 0.1216, base: 12363.99 },
+      { min: 220000, max: Infinity,rate: 0.1316, base: 20875.99 },
     ],
-    bpa: 12399,
+    bpa: 12989,
     surtax: true,
   },
   BC: {
@@ -309,11 +309,11 @@ function calcPayroll(
   if (td1Fed !== 16452) bpaf = td1Fed;
 
   const K1 = 0.14 * bpaf;
-  const K2 = 0.15 * annualCPP + 0.15 * annualCPP2; // CPP credit rate is 15% per T4127
+  const K2 = FED_CPP_CREDIT_RATE * annualCPP + FED_CPP_CREDIT_RATE * annualCPP2;
   const K3 = 0.14 * annualEI;
   // CEA applies to employment income only (base earnings × PP, not including vac pay)
   const annualBaseOnly = baseEarnings * PP;
-  const K4 = 0.14 * Math.min(annualBaseOnly, 1433);
+  const K4 = 0.14 * Math.min(annualBaseOnly, 1501);
   const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
   const annualFedTax    = Math.round(annualFedTaxRaw);
   const periodFedTax    = +(annualFedTax / PP).toFixed(2);
