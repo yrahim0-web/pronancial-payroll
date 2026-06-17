@@ -108,34 +108,35 @@ const PROV_TAX = {
   },
   BC: {
     brackets: [
-      { min: 0,      max: 45654,   rate: 0.0506, base: 0       },
-      { min: 45654,  max: 91310,   rate: 0.077,  base: 2310.09 },
-      { min: 91310,  max: 104835,  rate: 0.105,  base: 5822.41 },
-      { min: 104835, max: 127299,  rate: 0.1229, base: 7244.63 },
-      { min: 127299, max: 172602,  rate: 0.147,  base: 10010.69},
-      { min: 172602, max: 240716,  rate: 0.168,  base: 16673.18},
-      { min: 240716, max: Infinity,rate: 0.205,  base: 28115.58},
+      { min: 0,      max: 50363,   rate: 0.0506, base: 0       },
+      { min: 50363,  max: 100728,  rate: 0.0770, base: 2548.37 },
+      { min: 100728, max: 115648,  rate: 0.1050, base: 6426.48 },
+      { min: 115648, max: 140430,  rate: 0.1229, base: 7993.08 },
+      { min: 140430, max: 190405,  rate: 0.1470, base: 11039.47},
+      { min: 190405, max: 265545,  rate: 0.1680, base: 18385.80},
+      { min: 265545, max: Infinity,rate: 0.2050, base: 31009.32},
     ],
-    bpa: 11981,
+    bpa: 13216,
     surtax: false,
   },
   AB: {
     brackets: [
-      { min: 0,      max: 148269,  rate: 0.10,   base: 0        },
-      { min: 148269, max: 177922,  rate: 0.12,   base: 14826.90 },
-      { min: 177922, max: 237230,  rate: 0.13,   base: 18385.26 },
-      { min: 237230, max: 355845,  rate: 0.14,   base: 26096.16 },
-      { min: 355845, max: Infinity,rate: 0.15,   base: 42706.46 },
+      { min: 0,      max: 61200,   rate: 0.08,   base: 0        },
+      { min: 61200,  max: 154259,  rate: 0.10,   base: 4896.00  },
+      { min: 154259, max: 185111,  rate: 0.12,   base: 14201.90 },
+      { min: 185111, max: 246813,  rate: 0.13,   base: 17904.14 },
+      { min: 246813, max: 370220,  rate: 0.14,   base: 25925.40 },
+      { min: 370220, max: Infinity,rate: 0.15,   base: 43202.38 },
     ],
-    bpa: 21003,
+    bpa: 22769,
     surtax: false,
   },
   QC: {
     brackets: [
-      { min: 0,      max: 51780,   rate: 0.14,   base: 0        },
-      { min: 51780,  max: 103545,  rate: 0.19,   base: 7249.20  },
-      { min: 103545, max: 126000,  rate: 0.24,   base: 17084.75 },
-      { min: 126000, max: Infinity,rate: 0.2575, base: 22473.95 },
+      { min: 0,      max: 54345,   rate: 0.14,   base: 0        },
+      { min: 54345,  max: 108680,  rate: 0.19,   base: 7608.30  },
+      { min: 108680, max: 132245,  rate: 0.24,   base: 17931.95 },
+      { min: 132245, max: Infinity,rate: 0.2575, base: 23587.55 },
     ],
     bpa: 17183,
     surtax: false,
@@ -151,55 +152,57 @@ const PROV_TAX = {
   },
   SK: {
     brackets: [
-      { min: 0,      max: 49720,   rate: 0.105,  base: 0       },
-      { min: 49720,  max: 142058,  rate: 0.125,  base: 5220.60 },
-      { min: 142058, max: Infinity,rate: 0.145,  base: 16762.85},
+      { min: 0,      max: 54532,   rate: 0.105,  base: 0       },
+      { min: 54532,  max: 155805,  rate: 0.125,  base: 5725.86 },
+      { min: 155805, max: Infinity,rate: 0.145,  base: 18384.99},
     ],
-    bpa: 17661,
+    bpa: 20381,
     surtax: false,
   },
   NS: {
     brackets: [
-      { min: 0,      max: 29590,   rate: 0.0879, base: 0       },
-      { min: 29590,  max: 59180,   rate: 0.1495, base: 2601.95 },
-      { min: 59180,  max: 93000,   rate: 0.1667, base: 7028.34 },
-      { min: 93000,  max: 150000,  rate: 0.175,  base: 13669.40},
-      { min: 150000, max: Infinity,rate: 0.21,   base: 23644.40},
+      { min: 0,      max: 30995,   rate: 0.0879, base: 0       },
+      { min: 30995,  max: 61991,   rate: 0.1495, base: 2724.46 },
+      { min: 61991,  max: 97417,   rate: 0.1667, base: 7358.36 },
+      { min: 97417,  max: 157124,  rate: 0.175,  base: 13265.87},
+      { min: 157124, max: Infinity,rate: 0.21,   base: 23714.60},
     ],
-    bpa: 8481,
+    bpa: 11932,
     surtax: false,
   },
   NB: {
     brackets: [
-      { min: 0,      max: 47715,   rate: 0.094,  base: 0       },
-      { min: 47715,  max: 95431,   rate: 0.14,   base: 4485.21 },
-      { min: 95431,  max: 176756,  rate: 0.16,   base: 11165.65},
-      { min: 176756, max: Infinity,rate: 0.195,  base: 24177.65},
+      { min: 0,      max: 52333,   rate: 0.094,  base: 0       },
+      { min: 52333,  max: 104666,  rate: 0.14,   base: 4915.30 },
+      { min: 104666, max: 193861,  rate: 0.16,   base: 12241.92},
+      { min: 193861, max: Infinity,rate: 0.195,  base: 26513.12},
     ],
-    bpa: 12458,
+    bpa: 13664,
     surtax: false,
   },
   NL: {
     brackets: [
-      { min: 0,      max: 43198,   rate: 0.087,  base: 0       },
-      { min: 43198,  max: 86395,   rate: 0.145,  base: 3758.23 },
-      { min: 86395,  max: 154244,  rate: 0.158,  base: 10022.52},
-      { min: 154244, max: 215943,  rate: 0.178,  base: 20743.30},
-      { min: 215943, max: 275870,  rate: 0.198,  base: 31726.90},
-      { min: 275870, max: Infinity,rate: 0.213,  base: 43585.35},
+      { min: 0,       max: 44678,    rate: 0.087, base: 0        },
+      { min: 44678,   max: 89354,    rate: 0.145, base: 3887.99  },
+      { min: 89354,   max: 159528,   rate: 0.158, base: 10366.01 },
+      { min: 159528,  max: 223340,   rate: 0.178, base: 21453.50 },
+      { min: 223340,  max: 285319,   rate: 0.198, base: 32812.04 },
+      { min: 285319,  max: 570638,   rate: 0.208, base: 45083.88 },
+      { min: 570638,  max: 1141275,  rate: 0.213, base: 104430.23},
+      { min: 1141275, max: Infinity, rate: 0.218, base: 225975.91},
     ],
-    bpa: 10818,
+    bpa: 11188,
     surtax: false,
   },
   PE: {
     brackets: [
-      { min: 0,      max: 32656,   rate: 0.096,  base: 0       },
-      { min: 32656,  max: 64313,   rate: 0.1337, base: 3135.98 },
-      { min: 64313,  max: 105000,  rate: 0.167,  base: 7367.59 },
-      { min: 105000, max: 140000,  rate: 0.18,   base: 14152.06},
-      { min: 140000, max: Infinity,rate: 0.1865, base: 20452.06},
+      { min: 0,      max: 33928,   rate: 0.095,  base: 0       },
+      { min: 33928,  max: 65820,   rate: 0.1347, base: 3223.16 },
+      { min: 65820,  max: 106890,  rate: 0.166,  base: 7519.02 },
+      { min: 106890, max: 142250,  rate: 0.1762, base: 14336.64},
+      { min: 142250, max: Infinity,rate: 0.19,   base: 20567.10},
     ],
-    bpa: 12000,
+    bpa: 15000,
     surtax: false,
   },
 };
@@ -217,8 +220,8 @@ function calcBracketTax(annualIncome, brackets) {
 // ─── Ontario Surtax (2025) ────────────────────────────────────────────────────
 function calcONSurtax(basicProvTax) {
   let surtax = 0;
-  if (basicProvTax > 5765) surtax += (basicProvTax - 5765) * 0.20;
-  if (basicProvTax > 7387) surtax += (basicProvTax - 7387) * 0.36;
+  if (basicProvTax > 5818) surtax += (basicProvTax - 5818) * 0.20;
+  if (basicProvTax > 7446) surtax += (basicProvTax - 7446) * 0.36;
   return surtax;
 }
 
@@ -298,12 +301,12 @@ function calcPayroll(
   // T4127 Step 3 — exact formula: T1 = T3 - K1 - K2 - K3 - K4
   // T4127 2026 BPAF formula — income tested
   let bpaf = td1Fed; // use employee's TD1 claim
-  if (annualGross <= 177882) {
+  if (annualGross <= 181440) {
     bpaf = 16452;
-  } else if (annualGross >= 253414) {
-    bpaf = 15705;
+  } else if (annualGross >= 258482) {
+    bpaf = 14829;
   } else {
-    bpaf = 16452 - (16452 - 15705) * (annualGross - 177882) / (253414 - 177882);
+    bpaf = 16452 - (16452 - 14829) * (annualGross - 181440) / (258482 - 181440);
   }
   // Override with employee's TD1 if they claimed a specific amount
   if (td1Fed !== 16452) bpaf = td1Fed;
@@ -1464,8 +1467,8 @@ const [showPreview, setShowPreview] = useState(false);
     const defaultReg = e.type === "Salary" ? "80" : "0";
     const defaultVac = (e.vac_rate || "4%").replace("%","");
     const h = hours[e.id] || { reg: defaultReg, ot:"0", stat:"0", bonus:"0", vacRate: defaultVac + "%" };
-    const fedTD1 = (!e.td1_fed || e.td1_fed === 15705) ? 16452 : e.td1_fed;
-    const provTD1 = (!e.td1_prov || e.td1_prov === 0) ? 12399 : e.td1_prov;
+    const fedTD1 = e.td1_fed || 16452;
+    const provTD1 = e.td1_prov || null;
     return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04, selectedFreq, fedTD1, provTD1), ...h };
   });
 
