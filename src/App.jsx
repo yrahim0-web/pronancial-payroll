@@ -555,12 +555,28 @@ function LoginPage({ onLogin }) {
   );
 }
 
+// ─── Global theme styles ─────────────────────────────────────────────────────
+const DARK_STYLE = `
+  [data-theme="dark"] { background:#0c1117!important; color:#e8f0fe!important; }
+  [data-theme="dark"] .bg-white, [data-theme="dark"] .bg-gray-50 { background:#141b24!important; }
+  [data-theme="dark"] .border-gray-100, [data-theme="dark"] .border-gray-200 { border-color:#1e2d40!important; }
+  [data-theme="dark"] .text-gray-900, [data-theme="dark"] .text-gray-800, [data-theme="dark"] .text-gray-700 { color:#e8f0fe!important; }
+  [data-theme="dark"] .text-gray-600, [data-theme="dark"] .text-gray-500, [data-theme="dark"] .text-gray-400 { color:#6b7fa3!important; }
+  [data-theme="dark"] .bg-gray-100, [data-theme="dark"] .bg-gray-50 { background:#1a2332!important; }
+  [data-theme="dark"] .hover\\:bg-gray-50:hover { background:#1a2332!important; }
+  [data-theme="dark"] .divide-gray-50 > * { border-color:#1e2d40!important; }
+  [data-theme="dark"] .border-b { border-color:#1e2d40!important; }
+  [data-theme="dark"] .border-t { border-color:#1e2d40!important; }
+  [data-theme="dark"] input, [data-theme="dark"] select { background:#1a2332!important; color:#e8f0fe!important; border-color:#1e2d40!important; }
+  [data-theme="dark"] table thead tr { border-color:#1e2d40!important; }
+  [data-theme="dark"] .shadow-sm { box-shadow:0 1px 3px rgba(0,0,0,0.4)!important; }
+`;
+
 // ─── Dashboard ───────────────────────────────────────────────────────────────
-function Dashboard({ company, companies, setPage, setSelectedCompany }) {
+function Dashboard({ company, companies, setPage, setSelectedCompany, theme = 'light', switchTheme }) {
   const [emps, setEmps] = useState([]);
   const [recentRuns, setRecentRuns] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState(() => localStorage.getItem('pron_theme') || 'light');
   const [activeView, setActiveView] = useState('both');
   const [activeBar, setActiveBar] = useState('gross');
   const trendRef = useRef(null);
@@ -571,11 +587,6 @@ function Dashboard({ company, companies, setPage, setSelectedCompany }) {
   const barChart = useRef(null);
 
   const isDark = theme === 'dark';
-
-  const switchTheme = (t) => {
-    setTheme(t);
-    localStorage.setItem('pron_theme', t);
-  };
 
   const D = isDark ? {
     bg:'#0c1117', surface:'#141b24', surface2:'#1a2332', border:'#1e2d40',
@@ -732,37 +743,18 @@ function Dashboard({ company, companies, setPage, setSelectedCompany }) {
   ];
 
   const s = {
-    wrap:    `min-h-screen transition-colors duration-200 ${isDark?'bg-[#0c1117] text-[#e8f0fe]':'bg-[#f0f4f8] text-[#0f172a]'}`,
-    surface: isDark?'bg-[#141b24] border-[#1e2d40]':'bg-white border-[#e2e8f0]',
-    surface2:isDark?'bg-[#1a2332]':'bg-[#f4f7fb]',
-    border:  isDark?'border-[#1e2d40]':'border-[#e2e8f0]',
-    muted:   isDark?'text-[#6b7fa3]':'text-[#64748b]',
-    faint:   isDark?'bg-[#0f1620]':'bg-[#eef2f7]',
-    accent:  isDark?'text-[#3b82f6]':'text-[#2563eb]',
-    accentBg:isDark?'bg-[#3b82f6]':'bg-[#2563eb]',
+    surface:  {background:isDark?'#141b24':'#ffffff', border:`1px solid ${isDark?'#1e2d40':'#e2e8f0'}`},
+    surface2: {background:isDark?'#1a2332':'#f4f7fb'},
+    border:   `1px solid ${isDark?'#1e2d40':'#e2e8f0'}`,
+    muted:    isDark?'#6b7fa3':'#64748b',
+    faint:    {background:isDark?'#0f1620':'#eef2f7'},
+    accent:   isDark?'#3b82f6':'#2563eb',
+    accentBg: isDark?'#3b82f6':'#2563eb',
+    text:     isDark?'#e8f0fe':'#0f172a',
   };
 
   return (
-    <div className={s.wrap}>
-      {/* ── Topbar ── */}
-      <div className={`flex items-center justify-between px-5 py-3 border-b ${s.surface} border sticky top-0 z-10`}>
-        <div className="flex items-center gap-3">
-          <div className={`w-7 h-7 ${s.accentBg} rounded-lg flex items-center justify-center text-white font-bold text-xs`}>P</div>
-          <div>
-            <div className="font-semibold text-sm leading-tight">{company.name}</div>
-            <div className={`text-xs ${s.muted}`}>Fiscal 2026 · {getNextPayDate()}</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className={`flex items-center text-xs ${s.muted} gap-2 px-3 py-1.5 rounded-lg border ${s.border} ${s.surface2}`}>
-            <Calendar size={12}/> Period 11 · May 25 – Jun 7
-          </div>
-          <button onClick={()=>setPage("run")} className={`flex items-center gap-1.5 px-3 py-1.5 ${s.accentBg} text-white rounded-xl text-xs font-medium hover:opacity-90 transition-opacity`}>
-            <PlayCircle size={13}/> Run Payroll
-          </button>
-        </div>
-      </div>
-
+    <div data-theme={theme} style={{minHeight:'100%'}}>
       <div className="p-5 space-y-5">
         {/* ── KPI Row ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -772,18 +764,18 @@ function Dashboard({ company, companies, setPage, setSelectedCompany }) {
             { label:'Active Employees',  value: loading?'…':emps.length, sub:<span className={s.muted}>{emps.filter(e=>e.type==='Salary').length} salary · {emps.filter(e=>e.type==='Hourly').length} hourly</span>, color:'#06b6d4' },
             { label:'Next Pay Date',     value: getNextPayDate(), sub:<span className={`text-xs px-2 py-0.5 rounded-full ${isDark?'bg-blue-900/40 text-blue-300':'bg-blue-50 text-blue-600'}`}>{freq}</span>, color:'#8b5cf6' },
           ].map(k=>(
-            <div key={k.label} className={`rounded-xl border p-4 ${s.surface} relative overflow-hidden cursor-pointer hover:border-blue-500 transition-colors`}>
-              <div className="absolute bottom-0 left-0 right-0 h-0.5" style={{background:k.color}}/>
-              <div className={`text-xs uppercase tracking-wide font-medium mb-2 ${s.muted}`}>{k.label}</div>
-              <div className="text-2xl font-bold leading-none mb-1.5" style={{fontFamily:'Space Grotesk,system-ui'}}>{k.value}</div>
-              <div className="text-xs">{k.sub}</div>
+            <div key={k.label} style={{...s.surface, position:'relative', overflow:'hidden', cursor:'pointer', borderRadius:'12px', padding:'16px'}} className="transition-colors hover:border-blue-500">
+              <div style={{position:'absolute',bottom:0,left:0,right:0,height:'2px',background:k.color}}/>
+              <div style={{fontSize:'10.5px',textTransform:'uppercase',letterSpacing:'0.06em',fontWeight:500,marginBottom:'8px',color:s.muted}}>{k.label}</div>
+              <div style={{fontSize:'22px',fontWeight:700,lineHeight:1,marginBottom:'6px',fontFamily:'Space Grotesk,system-ui',color:s.text}}>{k.value}</div>
+              <div style={{fontSize:'11px'}}>{k.sub}</div>
             </div>
           ))}
         </div>
 
         {/* ── Row 1: Trend + Donut ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className={`lg:col-span-2 rounded-xl border p-4 ${s.surface}`}>
+          <div style={{...s.surface, borderRadius:'12px', padding:'16px', gridColumn:'span 2'}} className="lg:col-span-2">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <div className="text-sm font-semibold">Payroll trend</div>
@@ -1404,32 +1396,33 @@ const getPeriodList = (schedule) => {
 
 // ─── Run Payroll ──────────────────────────────────────────────────────────────
 const BIWEEKLY_PERIODS = [
-  { period: 1,  start: "Jan 5, 2026",  end: "Jan 18, 2026",  payDate: "Jan 19, 2026" },
-  { period: 2,  start: "Jan 19, 2026", end: "Feb 1, 2026",   payDate: "Feb 2, 2026" },
-  { period: 3,  start: "Feb 2, 2026",  end: "Feb 15, 2026",  payDate: "Feb 16, 2026" },
-  { period: 4,  start: "Feb 16, 2026", end: "Mar 1, 2026",   payDate: "Mar 2, 2026" },
-  { period: 5,  start: "Mar 2, 2026",  end: "Mar 15, 2026",  payDate: "Mar 16, 2026" },
-  { period: 6,  start: "Mar 16, 2026", end: "Mar 29, 2026",  payDate: "Mar 30, 2026" },
-  { period: 7,  start: "Mar 30, 2026", end: "Apr 12, 2026",  payDate: "Apr 13, 2026" },
-  { period: 8,  start: "Apr 13, 2026", end: "Apr 26, 2026",  payDate: "Apr 27, 2026" },
-  { period: 9,  start: "Apr 27, 2026", end: "May 10, 2026",  payDate: "May 11, 2026" },
-  { period: 10, start: "May 11, 2026", end: "May 24, 2026",  payDate: "May 25, 2026" },
-  { period: 11, start: "May 25, 2026", end: "Jun 7, 2026",   payDate: "Jun 8, 2026" },
-  { period: 12, start: "Jun 8, 2026",  end: "Jun 21, 2026",  payDate: "Jun 22, 2026" },
-  { period: 13, start: "Jun 22, 2026", end: "Jul 5, 2026",   payDate: "Jul 6, 2026" },
-  { period: 14, start: "Jul 6, 2026",  end: "Jul 19, 2026",  payDate: "Jul 20, 2026" },
-  { period: 15, start: "Jul 20, 2026", end: "Aug 2, 2026",   payDate: "Aug 3, 2026" },
-  { period: 16, start: "Aug 3, 2026",  end: "Aug 16, 2026",  payDate: "Aug 17, 2026" },
-  { period: 17, start: "Aug 17, 2026", end: "Aug 30, 2026",  payDate: "Aug 31, 2026" },
-  { period: 18, start: "Aug 31, 2026", end: "Sep 13, 2026",  payDate: "Sep 14, 2026" },
-  { period: 19, start: "Sep 14, 2026", end: "Sep 27, 2026",  payDate: "Sep 28, 2026" },
-  { period: 20, start: "Sep 28, 2026", end: "Oct 11, 2026",  payDate: "Oct 12, 2026" },
-  { period: 21, start: "Oct 12, 2026", end: "Oct 25, 2026",  payDate: "Oct 26, 2026" },
-  { period: 22, start: "Oct 26, 2026", end: "Nov 8, 2026",   payDate: "Nov 9, 2026" },
-  { period: 23, start: "Nov 9, 2026",  end: "Nov 22, 2026",  payDate: "Nov 23, 2026" },
-  { period: 24, start: "Nov 23, 2026", end: "Dec 6, 2026",   payDate: "Dec 7, 2026" },
-  { period: 25, start: "Dec 7, 2026",  end: "Dec 20, 2026",  payDate: "Dec 21, 2026" },
-  { period: 26, start: "Dec 21, 2026", end: "Jan 3, 2027",   payDate: "Jan 4, 2027" },
+  { period: 1,  start: "Dec 29, 2025", end: "Jan 11, 2026", payDate: "Jan 12, 2026" },
+  { period: 2,  start: "Jan 12, 2026", end: "Jan 25, 2026", payDate: "Jan 26, 2026" },
+  { period: 3,  start: "Jan 26, 2026", end: "Feb 8, 2026",  payDate: "Feb 9, 2026" },
+  { period: 4,  start: "Feb 9, 2026",  end: "Feb 22, 2026", payDate: "Feb 23, 2026" },
+  { period: 5,  start: "Feb 23, 2026", end: "Mar 8, 2026",  payDate: "Mar 9, 2026" },
+  { period: 6,  start: "Mar 9, 2026",  end: "Mar 22, 2026", payDate: "Mar 23, 2026" },
+  { period: 7,  start: "Mar 23, 2026", end: "Apr 5, 2026",  payDate: "Apr 6, 2026" },
+  { period: 8,  start: "Apr 6, 2026",  end: "Apr 19, 2026", payDate: "Apr 20, 2026" },
+  { period: 9,  start: "Apr 20, 2026", end: "May 3, 2026",  payDate: "May 4, 2026" },
+  { period: 10, start: "May 4, 2026",  end: "May 17, 2026", payDate: "May 18, 2026" },
+  { period: 11, start: "May 18, 2026", end: "May 31, 2026", payDate: "Jun 1, 2026" },
+  { period: 12, start: "Jun 1, 2026",  end: "Jun 14, 2026",  payDate: "Jun 15, 2026" },
+  { period: 13, start: "Jun 15, 2026", end: "Jun 28, 2026",  payDate: "Jun 29, 2026" },
+  { period: 14, start: "Jun 29, 2026", end: "Jul 12, 2026",  payDate: "Jul 13, 2026" },
+  { period: 15, start: "Jul 13, 2026", end: "Jul 26, 2026",  payDate: "Jul 27, 2026" },
+  { period: 16, start: "Jul 27, 2026", end: "Aug 9, 2026",   payDate: "Aug 10, 2026" },
+  { period: 17, start: "Aug 10, 2026", end: "Aug 23, 2026",  payDate: "Aug 24, 2026" },
+  { period: 18, start: "Aug 24, 2026", end: "Sep 6, 2026",   payDate: "Sep 7, 2026" },
+  { period: 19, start: "Sep 7, 2026",  end: "Sep 20, 2026",  payDate: "Sep 21, 2026" },
+  { period: 20, start: "Sep 21, 2026", end: "Oct 4, 2026",   payDate: "Oct 5, 2026" },
+  { period: 21, start: "Oct 5, 2026",  end: "Oct 18, 2026",  payDate: "Oct 19, 2026" },
+  { period: 22, start: "Oct 19, 2026", end: "Nov 1, 2026",   payDate: "Nov 2, 2026" },
+  { period: 23, start: "Nov 2, 2026",  end: "Nov 15, 2026",  payDate: "Nov 16, 2026" },
+  { period: 24, start: "Nov 16, 2026", end: "Nov 29, 2026",  payDate: "Nov 30, 2026" },
+  { period: 25, start: "Nov 30, 2026", end: "Dec 13, 2026",  payDate: "Dec 14, 2026" },
+  { period: 26, start: "Dec 14, 2026", end: "Dec 27, 2026",  payDate: "Dec 28, 2026" },
+  { period: 27, start: "Dec 28, 2026", end: "Jan 10, 2027",  payDate: "Jan 11, 2027" },
 ];
 
 function RunPayrollPage({ company, setPage }) {
@@ -2257,7 +2250,7 @@ useEffect(() => {
 
   const renderPage = () => {
     switch (page) {
-      case "dashboard": return <Dashboard company={selectedCompany} companies={companies} setPage={setPage} setSelectedCompany={setSelectedCompany} />;
+      case "dashboard": return <Dashboard company={selectedCompany} companies={companies} setPage={setPage} setSelectedCompany={setSelectedCompany} theme={theme} switchTheme={switchTheme} />;
       case "companies": return <CompaniesPage companies={companies} setCompanies={setCompanies} setSelectedCompany={setSelectedCompany} setPage={setPage} />;
       case "employees": return <EmployeesPage company={selectedCompany} />;
       case "run": return <RunPayrollPage company={selectedCompany} setPage={setPage} />;
@@ -2291,7 +2284,7 @@ useEffect(() => {
             </button>
           ))}
         </nav>
-        <div className="p-3 border-t border-gray-100">
+        <div style={{borderTop:`1px solid ${isDark?'#1e2d40':'#f1f5f9'}`}} className="p-3">
           <button onClick={async () => { await supabase.auth.signOut(); setLoggedIn(false); }} style={{color:isDark?'#6b7fa3':'#94a3b8'}} onMouseEnter={e=>{e.currentTarget.style.color='#ef4444';e.currentTarget.style.background=isDark?'rgba(239,68,68,0.1)':'#fef2f2'}} onMouseLeave={e=>{e.currentTarget.style.color=isDark?'#6b7fa3':'#94a3b8';e.currentTarget.style.background='transparent'}} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all">
             <LogOut size={15} className="flex-shrink-0"/>
             {sidebarOpen && <span>Sign out</span>}
@@ -2308,7 +2301,7 @@ useEffect(() => {
           </button>
           {/* Company selector */}
           <div className="relative">
-            <button onClick={() => setCompanyDropdown(o=>!o)} className={`flex items-center gap-2 px-3 py-1.5 border rounded-xl transition-colors ${isDark?'border-[#1e2d40] hover:bg-[#1a2332] text-[#e8f0fe]':'border-gray-200 hover:bg-gray-50'}`}>
+            <button onClick={() => setCompanyDropdown(o=>!o)} style={{border:`1px solid ${isDark?'#1e2d40':'#e2e8f0'}`,background:'transparent',color:isDark?'#e8f0fe':'#1e293b'}} className="flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all">
               <div className="w-5 h-5 bg-blue-100 rounded-md flex items-center justify-center text-xs font-bold text-blue-600">{selectedCompany?.name?.[0] || "?"}</div>
               <span className={`text-sm font-medium max-w-32 truncate ${isDark?'text-[#e8f0fe]':'text-gray-800'}`} style={{color: isDark?'#e8f0fe':'#1e293b'}}>{selectedCompany.name}</span>
               <ChevronDown size={13} className="text-gray-400" />
