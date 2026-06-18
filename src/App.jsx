@@ -264,9 +264,12 @@ function calcPayroll(
     }
   }
 
-  const baseEarnings = +(regularPay + otPay + statPay + bon).toFixed(2);
-  const vacPay       = +(baseEarnings * vacRate).toFixed(2);
-  const grossPeriod  = +(baseEarnings + vacPay).toFixed(2);
+  // Vacationable earnings = regular + OT only (excludes stat pay & bonus — matches CRA rules)
+  const vacationableEarnings = +(regularPay + otPay).toFixed(2);
+  const employmentEarnings   = +(regularPay + otPay + statPay + bon).toFixed(2);
+  const baseEarnings = vacationableEarnings;            // "Base Pay" = hours × rate (+OT) only
+  const vacPay       = +(vacationableEarnings * vacRate).toFixed(2);
+  const grossPeriod  = +(employmentEarnings + vacPay).toFixed(2);
 
   // ── Step 2: CPP (T4127 Section A) ───────────────────────────────────────────
   // Annual CPP-pensionable earnings (gross × PP − basic exemption)
