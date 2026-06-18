@@ -1148,6 +1148,8 @@ useEffect(() => {
           status: "active",
           last_payroll: "—",
           sin: "***-***-000",
+          td1_fed: parseFloat(form.td1Fed) || 16452,
+          td1_prov: parseFloat(form.td1Prov) || null,
           email: form.email,
           hire_date: form.hireDate,
           vac_rate: (form.vacRate || "4") + "%",
