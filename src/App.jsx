@@ -2025,9 +2025,90 @@ function PaystubsPage({ company }) {
 
   const downloadPDF = async () => {
     if (!selectedEmp || !selectedRun) return;
-    const { default: jsPDF } = await import('jspdf');
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const W = 210; let y = 0;
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const W = 297; const H = 210;
+      const rText = (text, x, y) => { const w = pdf.getStringUnitWidth(String(text)) * pdf.getFontSize() / pdf.internal.scaleFactor; pdf.text(String(text), x - w, y); };
+      // Header
+      pdf.setFillColor(31,41,55); pdf.rect(0,0,W,18,'F');
+      pdf.setTextColor(255,255,255); pdf.setFontSize(11); pdf.setFont('helvetica','bold');
+      pdf.text((selectedEmp.name||'').toUpperCase(), 8, 8);
+      pdf.setFontSize(7); pdf.setFont('helvetica','normal');
+      pdf.text('Employee # 0001', 8, 14);
+      pdf.text('SIN: ' + (selectedEmp.sin||'***-***-000'), 60, 14);
+      pdf.text('Department # 02', 110, 8);
+      pdf.text('Employer # 0001', 110, 14);
+      pdf.text('Period Start: ' + (selectedRun.period?.split('–')[0]?.replace(/.*: /,'').trim()||''), 160, 8);
+      pdf.text('Period End: ' + (selectedRun.period?.split('–')[1]?.trim()||''), 160, 14);
+      pdf.text('Pay Day: ' + (selectedRun.pay_date||''), 240, 8);
+      // Subheader
+      pdf.setFillColor(243,244,246); pdf.rect(0,18,W,8,'F');
+      pdf.setTextColor(55,65,81); pdf.setFontSize(7); pdf.setFont('helvetica','bold');
+      pdf.text('Statement of Earnings', 8, 24);
+      pdf.text('Employee Deductions and Employer Contributions', 148, 24);
+      // Column headers
+      pdf.setFillColor(55,65,81); pdf.rect(0,26,145,7,'F'); pdf.rect(146,26,W-146,7,'F');
+      pdf.setTextColor(255,255,255); pdf.setFont('helvetica','bold'); pdf.setFontSize(6.5);
+      pdf.text('HOURS',10,31); pdf.text('RATE',32,31); pdf.text('AMOUNT',55,31); pdf.text('Y.T.D',85,31);
+      pdf.text('TYPE',150,31); pdf.text('CURRENT',170,31); pdf.text('Y.T.D',197,31);
+      pdf.text('TYPE',222,31); pdf.text('CURRENT',242,31); pdf.text('Y.T.D',270,31);
+      // Data
+      const hrs=+(selectedEmp.reg_hrs||0), rate=+(selectedEmp.rate||0);
+      const base=+(selectedEmp.base_earnings||0), ytdBase=+(selectedEmp.ytd_base_earnings||0);
+      const vacPay=+(selectedEmp.vac_pay||0), ytdVac=+(selectedEmp.ytd_vac||0);
+      const cpp=+(selectedEmp.cpp||0), ytdCpp=+(selectedEmp.ytd_cpp||0);
+      const ei=+(selectedEmp.ei||0), ytdEi=+(selectedEmp.ytd_ei||0);
+      const fedTax=+(selectedEmp.fed_tax||0), ytdFed=+(selectedEmp.ytd_fed_tax||0);
+      const provTax=+(selectedEmp.prov_tax||0), ytdProv=+(selectedEmp.ytd_prov_tax||0);
+      const erCpp=+(selectedEmp.er_cpp||0), ytdErCpp=+(selectedEmp.ytd_er_cpp||0);
+      const erEi=+(selectedEmp.er_ei||0), ytdErEi=+(selectedEmp.ytd_er_ei||0);
+      const gross=+(selectedEmp.gross||0), ytdGross=+(selectedEmp.ytd_gross||0);
+      const net=+(selectedEmp.net||0);
+      const earningsRows=[
+        {label:selectedEmp.emp_type==='Salary'?'SALARY':'REGULAR',hrs:hrs.toFixed(2),rate:'$'+rate.toFixed(2),amt:base.toFixed(2),ytd:ytdBase.toFixed(2)},
+        {label:'SICK HRS',hrs:'0.00',rate:'',amt:'0.00',ytd:'0.00'},
+        {label:'STAT',hrs:String(+(selectedEmp.stat_hrs||0)),rate:'',amt:(+(selectedEmp.stat_pay||0)).toFixed(2),ytd:'0.00'},
+        {label:'VAC.PAY',hrs:'0.0',rate:'4%',amt:vacPay.toFixed(2),ytd:ytdVac.toFixed(2)},
+      ];
+      const dedRows=[{l:'FED.TAX',c:fedTax.toFixed(2),y:ytdFed.toFixed(2)},{l:'CPP',c:cpp.toFixed(2),y:ytdCpp.toFixed(2)},{l:'EI',c:ei.toFixed(2),y:ytdEi.toFixed(2)}];
+      const erRows=[{l:'CPP',c:erCpp.toFixed(2),y:ytdErCpp.toFixed(2)},{l:'EI',c:erEi.toFixed(2),y:ytdErEi.toFixed(2)}];
+      let ry=40;
+      pdf.setTextColor(31,41,55); pdf.setFontSize(7);
+      earningsRows.forEach((r,i)=>{
+        if(i%2===0){pdf.setFillColor(249,250,251);pdf.rect(0,ry-4,145,7,'F');}
+        pdf.setFont('helvetica','bold'); pdf.text(r.label,8,ry);
+        pdf.setFont('helvetica','normal'); pdf.text(r.hrs,22,ry); pdf.text(r.rate,38,ry);
+        rText(r.amt,80,ry); rText(r.ytd,110,ry);
+        if(dedRows[i]){if(i%2===0){pdf.setFillColor(249,250,251);pdf.rect(146,ry-4,76,7,'F');} pdf.setFont('helvetica','bold');pdf.text(dedRows[i].l,150,ry);pdf.setFont('helvetica','normal');rText(dedRows[i].c,193,ry);rText(dedRows[i].y,218,ry);}
+        if(erRows[i]){if(i%2===0){pdf.setFillColor(249,250,251);pdf.rect(223,ry-4,W-223,7,'F');}pdf.setFont('helvetica','bold');pdf.text(erRows[i].l,226,ry);pdf.setFont('helvetica','normal');rText(erRows[i].c,260,ry);rText(erRows[i].y,290,ry);}
+        ry+=8;
+      });
+      // Summary
+      ry+=4;
+      pdf.setFillColor(55,65,81);pdf.rect(0,ry-5,W,8,'F');
+      pdf.setTextColor(255,255,255);pdf.setFont('helvetica','bold');pdf.setFontSize(7);
+      pdf.text('SUMMARY',8,ry);pdf.text('GROSS PAY',45,ry);pdf.text('DEDUCTIONS',85,ry);pdf.text('NET PAY',128,ry);pdf.text('NET PAY ALLOCATION',165,ry);
+      pdf.setTextColor(31,41,55);ry+=8;
+      const ded=cpp+ei+fedTax+provTax;
+      const ytdDed=ytdCpp+ytdEi+ytdFed+ytdProv;
+      const ytdNet=ytdGross-ytdCpp-ytdEi-ytdFed-ytdProv;
+      pdf.setFillColor(249,250,251);pdf.rect(0,ry-4,160,7,'F');
+      pdf.setFont('helvetica','bold');pdf.text('CURRENT',8,ry);pdf.setFont('helvetica','normal');
+      rText(gross.toFixed(2),70,ry);rText(ded.toFixed(2),112,ry);rText(net.toFixed(2),148,ry);
+      pdf.text('$ '+net.toFixed(2),165,ry);
+      pdf.setTextColor(107,114,128);pdf.setFontSize(6.5);pdf.text('Direct Deposit',210,ry);
+      pdf.setTextColor(31,41,55);ry+=8;
+      pdf.setFont('helvetica','bold');pdf.text('YEAR TO DATE',8,ry);pdf.setFont('helvetica','normal');
+      rText(ytdGross.toFixed(2),70,ry);rText(ytdDed.toFixed(2),112,ry);rText(ytdNet.toFixed(2),148,ry);ry+=10;
+      // Footer
+      pdf.setFillColor(243,244,246);pdf.rect(0,H-12,W,12,'F');
+      pdf.setFontSize(6.5);pdf.setTextColor(107,114,128);
+      pdf.text('Employer: '+(company.bn||'')+' '+(company.name||''), 8, H-6);
+      pdf.text('Pronancial Payroll System', W-45, H-6);
+      pdf.save('paystub-'+(selectedEmp.name||'emp').replace(/ /g,'-')+'-'+(selectedRun.pay_date||'')+'.pdf');
+    } catch(err) { console.error('PDF error:',err); alert('PDF failed: '+err.message); }
+  };
 
     // ── Header bar ──────────────────────────────────────────────────────────
     pdf.setFillColor(30, 64, 175); // PRIMARY: blue
