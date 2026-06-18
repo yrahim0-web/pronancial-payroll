@@ -2269,8 +2269,6 @@ function PaystubsPage({ company }) {
       pdf.save('paystub-'+(selectedEmp.name||'emp').replace(/ /g,'-')+'-'+(selectedRun.pay_date||'')+'.pdf');
     } catch(err) { console.error('PDF error:',err); alert('PDF failed: '+err.message); }
   };
-      // Header
-      pdf.setFillColor(31,41,55); pdf.rect(0,0,W,18,'F');
       pdf.setTextColor(255,255,255); pdf.setFontSize(11); pdf.setFont('helvetica','bold');
       pdf.text((selectedEmp.name||'').toUpperCase(), 8, 8);
       pdf.setFontSize(7); pdf.setFont('helvetica','normal');
