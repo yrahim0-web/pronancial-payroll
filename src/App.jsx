@@ -2294,6 +2294,9 @@ function PaystubsPage({ company }) {
 // ─── History ─────────────────────────────────────────────────────────────────
 function HistoryPage({ company }) {
   const [history, setHistory] = useState([]);
+  const [deleteRun, setDeleteRun] = useState(null);
+  const [deleteSelected, setDeleteSelected] = useState({});
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -2306,6 +2309,62 @@ function HistoryPage({ company }) {
     };
     fetchHistory();
   }, [company.id]);
+
+  const openDeleteModal = (run) => {
+    setDeleteRun(run);
+    const init = {};
+    (run.details || []).forEach(d => { init[d.employee_id] = true; });
+    setDeleteSelected(init);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteRun) return;
+    setDeleting(true);
+    const toDelete = (deleteRun.details || []).filter(d => deleteSelected[d.employee_id]);
+    const toKeep   = (deleteRun.details || []).filter(d => !deleteSelected[d.employee_id]);
+
+    // Reverse YTD for deleted employees
+    for (const detail of toDelete) {
+      const { data: freshEmp } = await supabase
+        .from('employees')
+        .select('ytd_gross,ytd_cpp,ytd_ei,ytd_fed_tax,ytd_prov_tax,ytd_vac,ytd_er_cpp,ytd_er_ei,ytd_base_earnings')
+        .eq('id', detail.employee_id).single();
+      if (freshEmp) {
+        await supabase.from('employees').update({
+          ytd_gross:         +Math.max((freshEmp.ytd_gross||0)-(detail.gross||0),0).toFixed(2),
+          ytd_cpp:           +Math.max((freshEmp.ytd_cpp||0)-(detail.cpp||0),0).toFixed(2),
+          ytd_ei:            +Math.max((freshEmp.ytd_ei||0)-(detail.ei||0),0).toFixed(2),
+          ytd_fed_tax:       +Math.max((freshEmp.ytd_fed_tax||0)-(detail.fed_tax||0),0).toFixed(2),
+          ytd_prov_tax:      +Math.max((freshEmp.ytd_prov_tax||0)-(detail.prov_tax||0),0).toFixed(2),
+          ytd_vac:           +Math.max((freshEmp.ytd_vac||0)-(detail.vac_pay||0),0).toFixed(2),
+          ytd_er_cpp:        +Math.max((freshEmp.ytd_er_cpp||0)-(detail.er_cpp||0),0).toFixed(2),
+          ytd_er_ei:         +Math.max((freshEmp.ytd_er_ei||0)-(detail.er_ei||0),0).toFixed(2),
+          ytd_base_earnings: +Math.max((freshEmp.ytd_base_earnings||0)-(detail.base_earnings||0),0).toFixed(2),
+        }).eq('id', detail.employee_id);
+      }
+    }
+
+    if (toKeep.length === 0) {
+      // Delete entire run
+      await supabase.from('payroll_runs').delete().eq('id', deleteRun.id);
+      setHistory(prev => prev.filter(r => r.id !== deleteRun.id));
+    } else {
+      // Update run keeping only remaining employees
+      const newGross = toKeep.reduce((a,d) => a + (+d.gross||0), 0);
+      const newNet   = toKeep.reduce((a,d) => a + (+d.net||0), 0);
+      const newDed   = toKeep.reduce((a,d) => a + (+d.cpp||0) + (+d.ei||0) + (+d.tax||0), 0);
+      const { data: updated } = await supabase.from('payroll_runs').update({
+        details: toKeep,
+        employees: toKeep.length,
+        gross: +newGross.toFixed(2),
+        net: +newNet.toFixed(2),
+        deductions: +newDed.toFixed(2),
+      }).eq('id', deleteRun.id).select().single();
+      if (updated) setHistory(prev => prev.map(r => r.id === updated.id ? updated : r));
+    }
+    setDeleting(false);
+    setDeleteRun(null);
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -2347,7 +2406,10 @@ function HistoryPage({ company }) {
                   <td className="px-5 py-4 text-sm font-semibold text-emerald-700">${Number(p.net).toLocaleString()}</td>
                   <td className="px-5 py-4"><Badge color="green">Completed</Badge></td>
                   <td className="px-5 py-4">
-                    <button className="flex items-center gap-1 text-xs text-blue-600 hover:underline"><Eye size={13}/> View</button>
+                    <div className="flex items-center gap-2">
+                      <button className="flex items-center gap-1 text-xs text-blue-600 hover:underline"><Eye size={13}/> View</button>
+                      <button onClick={() => openDeleteModal(p)} className="flex items-center gap-1 text-xs text-red-500 hover:underline"><Trash2 size={13}/> Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -2355,6 +2417,37 @@ function HistoryPage({ company }) {
           </table>
         </div>
       </Card>
+    {deleteRun && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:"rgba(0,0,0,0.4)"}}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Delete Payroll Entries</h2>
+              <button onClick={() => setDeleteRun(null)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"><X size={16}/></button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-600 mb-1">Period: <span className="font-medium">{deleteRun.period}</span></p>
+              <p className="text-xs text-gray-400 mb-4">Select employees whose payroll entries you want to delete. YTD will be reversed for selected employees.</p>
+              <div className="space-y-2 mb-5">
+                {(deleteRun.details || []).map((d, i) => (
+                  <label key={i} className="flex items-center gap-3 p-3 border border-gray-100 rounded-xl cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" checked={deleteSelected[d.employee_id] === true} onChange={e => setDeleteSelected(p => ({...p, [d.employee_id]: e.target.checked}))} className="w-4 h-4 accent-red-500"/>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">{d.name}</p>
+                      <p className="text-xs text-gray-400">Gross: ${(+d.gross||0).toFixed(2)} · Net: ${(+d.net||0).toFixed(2)}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setDeleteRun(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50">Cancel</button>
+                <button onClick={confirmDelete} disabled={deleting || !Object.values(deleteSelected).some(Boolean)} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl font-medium">
+                  {deleting ? "Deleting..." : "Delete Selected"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
