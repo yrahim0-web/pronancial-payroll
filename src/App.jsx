@@ -1260,8 +1260,10 @@ useEffect(() => {
         vac_rate: (form.vacRate || "4") + "%",
         payroll_schedule: form.paySchedule || "Semi-monthly",
       };
-      // Only update YTD fields if ytd_lock is explicitly enabled by user
-      if (form.ytd_unlock === true) {
+      // Only protect YTD fields on edit if employee already has YTD data and unlock is not checked
+      const hasExistingYTD = (editEmployee.ytd_gross || 0) > 0;
+      const shouldUpdateYTD = !hasExistingYTD || form.ytd_unlock === true;
+      if (shouldUpdateYTD) {
         if (form.ytd_gross !== "") updatePayload.ytd_gross = parseFloat(form.ytd_gross) || 0;
         if (form.ytd_cpp !== "") updatePayload.ytd_cpp = parseFloat(form.ytd_cpp) || 0;
         if (form.ytd_ei !== "") updatePayload.ytd_ei = parseFloat(form.ytd_ei) || 0;
@@ -1283,7 +1285,7 @@ useEffect(() => {
       }
       setEditEmployee(null);
     } else {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('employees')
         .insert([{
           company_id: company.id,
@@ -1316,7 +1318,8 @@ useEffect(() => {
       if (data) {
         setEmployees(prev => [...prev, data]);
       } else {
-        alert("Failed to save employee. Please check all fields and try again.");
+        console.error("Supabase insert error:", error);
+        alert("Failed to save employee: " + (error?.message || "Unknown error"));
         return;
       }
     }
