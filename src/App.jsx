@@ -1116,7 +1116,7 @@ useEffect(() => {
   };
   fetchEmployees();
 }, [company.id]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "", ytd_reg_hrs: "" });
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
 
@@ -1126,46 +1126,101 @@ useEffect(() => {
     setImporting(true);
     setImportError("");
     try {
-      const XLSX = await import('xlsx');
-      const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-      // Flatten all cell values for fuzzy searching
-      const flat = rows.flat().map(v => String(v).trim());
+      let flat = [];
+
+      if (file.name.endsWith('.pdf')) {
+        // ── PDF extraction via pdf.js ──────────────────────────────────────
+        const pdfjsLib = await import('pdfjs-dist/build/pdf');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          fullText += content.items.map(item => item.str).join(" ") + " ";
+        }
+        // Tokenize into words/values
+        flat = fullText.split(/\s+/).map(v => v.trim()).filter(Boolean);
+      } else {
+        // ── Excel extraction ───────────────────────────────────────────────
+        const XLSX = await import('xlsx');
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+        flat = rows.flat().map(v => String(v).trim());
+      }
+
+      // ── Shared fuzzy extraction logic ────────────────────────────────────
       const findAfterLabel = (labels) => {
         for (const label of labels) {
-          const idx = flat.findIndex(v => v.toLowerCase().includes(label.toLowerCase()));
-          if (idx !== -1 && flat[idx + 1] !== undefined) {
-            const val = String(flat[idx + 1]).replace(/[$,()]/g, "").trim();
-            if (val && !isNaN(parseFloat(val))) return val;
+          const labelWords = label.toLowerCase().split(" ");
+          for (let i = 0; i < flat.length - 1; i++) {
+            const window = flat.slice(i, i + labelWords.length).join(" ").toLowerCase();
+            if (window.includes(label.toLowerCase())) {
+              // Scan ahead for first numeric value
+              for (let j = i + 1; j < Math.min(i + 6, flat.length); j++) {
+                const val = String(flat[j]).replace(/[$,()]/g, "").trim();
+                if (val && !isNaN(parseFloat(val)) && parseFloat(val) > 0) return val;
+              }
+            }
           }
         }
         return "";
       };
+
       const findText = (labels) => {
         for (const label of labels) {
-          const idx = flat.findIndex(v => v.toLowerCase().includes(label.toLowerCase()));
-          if (idx !== -1 && flat[idx + 1]) return String(flat[idx + 1]).trim();
+          for (let i = 0; i < flat.length - 1; i++) {
+            if (flat[i].toLowerCase().includes(label.toLowerCase())) {
+              const next = flat[i + 1];
+              if (next && !/^\d/.test(next)) return next;
+            }
+          }
         }
         return "";
       };
-      // Try to extract employee name
-      const fullName = findText(["employee name", "employee", "name"]);
+
+      const findRate = () => {
+        // Look for patterns like "$25.00/hr" or "95,000/yr" or "Rate: 45.00"
+        for (let i = 0; i < flat.length; i++) {
+          const v = flat[i].replace(/[$,]/g, "");
+          if (/^\d+(\.\d+)?$/.test(v) && parseFloat(v) > 10) {
+            const ctx = flat.slice(Math.max(0,i-2), i+2).join(" ").toLowerCase();
+            if (ctx.includes("rate") || ctx.includes("/hr") || ctx.includes("hourly") || ctx.includes("salary") || ctx.includes("/yr")) {
+              return v;
+            }
+          }
+        }
+        return "";
+      };
+
+      const fullName = findText(["employee", "name"]);
       const nameParts = fullName ? fullName.split(" ") : ["", ""];
+      const extractedRate = findRate();
+
+      // Try to find combined income tax (fed+prov together)
+      const combinedTax = findAfterLabel(["income tax (federal", "total income tax", "income tax ytd"]);
+      const fedTax  = findAfterLabel(["ytd federal", "federal tax", "fed tax", "federal income"]);
+      const provTax = findAfterLabel(["ytd provincial", "provincial tax", "prov tax", "provincial income"]);
+
       setForm(prev => ({
         ...prev,
-        firstName: nameParts[0] || prev.firstName,
-        lastName: nameParts.slice(1).join(" ") || prev.lastName,
-        ytd_gross:    findAfterLabel(["ytd gross", "gross ytd", "total gross", "year to date gross", "ytd earnings"]) || prev.ytd_gross,
-        ytd_cpp:      findAfterLabel(["ytd cpp", "cpp ytd", "cpp contributions", "canada pension"]) || prev.ytd_cpp,
-        ytd_ei:       findAfterLabel(["ytd ei", "ei ytd", "ei premiums", "employment insurance"]) || prev.ytd_ei,
-        ytd_fed_tax:  findAfterLabel(["ytd federal", "federal tax", "fed tax", "federal income"]) || prev.ytd_fed_tax,
-        ytd_prov_tax: findAfterLabel(["ytd provincial", "provincial tax", "prov tax", "provincial income"]) || prev.ytd_prov_tax,
-        ytd_vac:      findAfterLabel(["ytd vacation", "vacation pay", "vac pay", "vacation ytd"]) || prev.ytd_vac,
+        firstName:    nameParts[0] || prev.firstName,
+        lastName:     nameParts.slice(1).join(" ") || prev.lastName,
+        salary:       extractedRate && parseFloat(extractedRate) > 1000 ? extractedRate : prev.salary,
+        rate:         extractedRate && parseFloat(extractedRate) <= 200  ? extractedRate : prev.rate,
+        ytd_gross:    findAfterLabel(["ytd gross", "gross ytd", "total gross", "year to date gross", "ytd earnings", "gross earnings"]) || prev.ytd_gross,
+        ytd_cpp:      findAfterLabel(["ytd cpp", "cpp ytd", "cpp contributions", "canada pension", "cpp"]) || prev.ytd_cpp,
+        ytd_ei:       findAfterLabel(["ytd ei", "ei ytd", "ei premiums", "employment insurance", "ei"]) || prev.ytd_ei,
+        ytd_fed_tax:  combinedTax ? (parseFloat(combinedTax)/2).toFixed(2) : fedTax || prev.ytd_fed_tax,
+        ytd_prov_tax: combinedTax ? (parseFloat(combinedTax)/2).toFixed(2) : provTax || prev.ytd_prov_tax,
+        ytd_vac:      findAfterLabel(["ytd vacation", "vacation pay", "vac pay", "vacation ytd", "vacation"]) || prev.ytd_vac,
+        ytd_reg_hrs:  findAfterLabel(["ytd hours", "total hours", "reg hrs", "regular hours", "hours worked"]) || prev.ytd_reg_hrs,
       }));
     } catch (err) {
-      setImportError("Could not read file. Please ensure it is a valid Excel (.xlsx) file.");
+      setImportError("Could not read file. Please ensure it is a valid Excel (.xlsx) or PDF file.");
     }
     setImporting(false);
   };
@@ -1195,6 +1250,7 @@ useEffect(() => {
       if (form.ytd_vac !== "") updatePayload.ytd_vac = parseFloat(form.ytd_vac) || 0;
       if (form.ytd_er_cpp !== "") updatePayload.ytd_er_cpp = parseFloat(form.ytd_er_cpp) || 0;
       if (form.ytd_er_ei !== "") updatePayload.ytd_er_ei = parseFloat(form.ytd_er_ei) || 0;
+      if (form.ytd_reg_hrs !== "") updatePayload.ytd_reg_hrs = parseFloat(form.ytd_reg_hrs) || 0;
       const { data } = await supabase
         .from('employees')
         .update(updatePayload)
@@ -1231,7 +1287,8 @@ useEffect(() => {
           ytd_prov_tax: parseFloat(form.ytd_prov_tax) || 0,
           ytd_vac: parseFloat(form.ytd_vac) || 0,
           ytd_er_cpp: parseFloat(form.ytd_er_cpp) || 0,
-          ytd_er_ei: parseFloat(form.ytd_er_ei) || 0
+          ytd_er_ei: parseFloat(form.ytd_er_ei) || 0,
+          ytd_reg_hrs: parseFloat(form.ytd_reg_hrs) || 0
         }])
         .select()
         .single();
@@ -1293,7 +1350,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.ytd_gross||""), ytd_cpp: String(e.ytd_cpp||""), ytd_ei: String(e.ytd_ei||""), ytd_fed_tax: String(e.ytd_fed_tax||""), ytd_prov_tax: String(e.ytd_prov_tax||""), ytd_vac: String(e.ytd_vac||""), ytd_er_cpp: String(e.ytd_er_cpp||""), ytd_er_ei: String(e.ytd_er_ei||"") }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.ytd_gross||""), ytd_cpp: String(e.ytd_cpp||""), ytd_ei: String(e.ytd_ei||""), ytd_fed_tax: String(e.ytd_fed_tax||""), ytd_prov_tax: String(e.ytd_prov_tax||""), ytd_vac: String(e.ytd_vac||""), ytd_er_cpp: String(e.ytd_er_cpp||""), ytd_er_ei: String(e.ytd_er_ei||""), ytd_reg_hrs: String(e.ytd_reg_hrs||"") }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -1335,27 +1392,27 @@ useEffect(() => {
 <Input label="Provincial TD1 Claim ($)" type="number" value={form.td1Prov} onChange={e=>setForm(p=>({...p,td1Prov:e.target.value}))} placeholder="12989" />
           <Input label="Position / Job Title" placeholder="Software Developer" />
         </div>
-        {!editEmployee && (
-          <div className="border border-dashed border-blue-200 bg-blue-50 rounded-xl p-4 mt-2">
-            <p className="text-xs font-semibold text-blue-700 mb-1">📂 Import from Previous Paystub (Excel)</p>
-            <p className="text-xs text-blue-500 mb-2">Upload an .xlsx paystub from another payroll system to auto-fill YTD balances.</p>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <span className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">{importing ? "Reading..." : "Choose Excel File"}</span>
-              <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handlePaystubImport} disabled={importing} />
-              <span className="text-xs text-blue-400">Supports .xlsx, .xls</span>
-            </label>
-            {importError && <p className="text-xs text-red-500 mt-2">{importError}</p>}
-          </div>
-        )}
+        <div className="border border-dashed border-blue-200 bg-blue-50 rounded-xl p-4 mt-2">
+          <p className="text-xs font-semibold text-blue-700 mb-1">📂 Import from Previous Paystub (Excel or PDF)</p>
+          <p className="text-xs text-blue-500 mb-2">Upload a paystub from any payroll system to auto-fill name, rate, and YTD balances.</p>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <span className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">{importing ? "Reading..." : "Choose File"}</span>
+            <input type="file" accept=".xlsx,.xls,.pdf" className="hidden" onChange={handlePaystubImport} disabled={importing} />
+            <span className="text-xs text-blue-400">Supports .xlsx, .xls, .pdf</span>
+          </label>
+          {importError && <p className="text-xs text-red-500 mt-2">{importError}</p>}
+        </div>
         <div className="border-t border-gray-100 pt-4 mt-2">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Opening YTD Balances</p>
           <p className="text-xs text-gray-400 mb-3">Enter existing year-to-date balances if employee is mid-year transfer from another payroll system.</p>
           <div className="grid grid-cols-3 gap-4">
-            <Input label="YTD Gross ($)" type="number" value={form.ytd_gross||""} onChange={e=>setForm(p=>({...p,ytd_gross:e.target.value}))} placeholder="0.00" />
+            <Input label="YTD Regular Hours" type="number" value={form.ytd_reg_hrs||""} onChange={e=>setForm(p=>({...p,ytd_reg_hrs:e.target.value}))} placeholder="0" />
+          <Input label="YTD Gross ($)" type="number" value={form.ytd_gross||""} onChange={e=>setForm(p=>({...p,ytd_gross:e.target.value}))} placeholder="0.00" />
             <Input label="YTD CPP ($)" type="number" value={form.ytd_cpp||""} onChange={e=>setForm(p=>({...p,ytd_cpp:e.target.value}))} placeholder="0.00" />
             <Input label="YTD EI ($)" type="number" value={form.ytd_ei||""} onChange={e=>setForm(p=>({...p,ytd_ei:e.target.value}))} placeholder="0.00" />
             <Input label="YTD Federal Tax ($)" type="number" value={form.ytd_fed_tax||""} onChange={e=>setForm(p=>({...p,ytd_fed_tax:e.target.value}))} placeholder="0.00" />
             <Input label="YTD Provincial Tax ($)" type="number" value={form.ytd_prov_tax||""} onChange={e=>setForm(p=>({...p,ytd_prov_tax:e.target.value}))} placeholder="0.00" />
+            <Input label="YTD Total Income Tax ($)" type="number" value={((parseFloat(form.ytd_fed_tax)||0)+(parseFloat(form.ytd_prov_tax)||0)).toFixed(2)||""} readOnly placeholder="Auto-calculated" className="bg-blue-50" />
             <Input label="YTD Vacation Pay ($)" type="number" value={form.ytd_vac||""} onChange={e=>setForm(p=>({...p,ytd_vac:e.target.value}))} placeholder="0.00" />
           </div>
         </div>
@@ -1923,8 +1980,7 @@ function PaystubsPage({ company }) {
     const deds = [
       ['CPP Contributions', (+selectedEmp.cpp||0).toFixed(2), (+selectedEmp.ytd_cpp||0).toFixed(2)],
       ['EI Premiums', (+selectedEmp.ei||0).toFixed(2), (+selectedEmp.ytd_ei||0).toFixed(2)],
-      ['Federal Income Tax', (+selectedEmp.fed_tax||0).toFixed(2), (+selectedEmp.ytd_fed_tax||0).toFixed(2)],
-      ['Provincial Income Tax', (+selectedEmp.prov_tax||0).toFixed(2), (+selectedEmp.ytd_prov_tax||0).toFixed(2)],
+      ['Income Tax (Federal + Provincial)', ((+selectedEmp.fed_tax||0)+(+selectedEmp.prov_tax||0)).toFixed(2), ((+selectedEmp.ytd_fed_tax||0)+(+selectedEmp.ytd_prov_tax||0)).toFixed(2)],
     ];
     deds.forEach(([label, cur, ytd]) => {
       pdf.text(label, 18, y);
@@ -2061,8 +2117,7 @@ function PaystubsPage({ company }) {
                     <tr className="bg-red-50"><td className="px-5 py-1.5 text-xs font-semibold text-red-700" colSpan={3}>Employee Deductions</td></tr>
                     <tr><td className="px-5 py-2.5 text-gray-600 pl-8">CPP Contributions</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.cpp||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(+selectedEmp.ytd_cpp||0).toFixed(2)})</td></tr>
                     <tr><td className="px-5 py-2.5 text-gray-600 pl-8">EI Premiums</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.ei||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(+selectedEmp.ytd_ei||0).toFixed(2)})</td></tr>
-                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Federal Income Tax</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.fed_tax||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(+selectedEmp.ytd_fed_tax||0).toFixed(2)})</td></tr>
-                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Provincial Income Tax</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.prov_tax||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(+selectedEmp.ytd_prov_tax||0).toFixed(2)})</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Income Tax (Federal + Provincial)</td><td className="px-5 py-2.5 text-right text-red-500">({((+selectedEmp.fed_tax||0)+(+selectedEmp.prov_tax||0)).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({((+selectedEmp.ytd_fed_tax||0)+(+selectedEmp.ytd_prov_tax||0)).toFixed(2)})</td></tr>
                     <tr className="bg-blue-50"><td className="px-5 py-3 font-bold text-gray-900">Net Pay</td><td className="px-5 py-3 text-right font-bold text-emerald-700 text-base">${(+selectedEmp.net||0).toFixed(2)}</td><td className="px-5 py-3 text-right font-semibold text-gray-700">${((+selectedEmp.ytd_gross||0)-(+selectedEmp.ytd_cpp||0)-(+selectedEmp.ytd_ei||0)-(+selectedEmp.ytd_fed_tax||0)-(+selectedEmp.ytd_prov_tax||0)).toFixed(2)}</td></tr>
                     <tr className="bg-amber-50"><td className="px-5 py-1.5 text-xs font-semibold text-amber-700" colSpan={3}>Employer Contributions</td></tr>
                     <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Employer CPP (matched)</td><td className="px-5 py-2.5 text-right text-amber-600">{(+selectedEmp.er_cpp||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>
