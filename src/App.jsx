@@ -1410,9 +1410,7 @@ useEffect(() => {
           <Input label="YTD Gross ($)" type="number" value={form.ytd_gross||""} onChange={e=>setForm(p=>({...p,ytd_gross:e.target.value}))} placeholder="0.00" />
             <Input label="YTD CPP ($)" type="number" value={form.ytd_cpp||""} onChange={e=>setForm(p=>({...p,ytd_cpp:e.target.value}))} placeholder="0.00" />
             <Input label="YTD EI ($)" type="number" value={form.ytd_ei||""} onChange={e=>setForm(p=>({...p,ytd_ei:e.target.value}))} placeholder="0.00" />
-            <Input label="YTD Federal Tax ($)" type="number" value={form.ytd_fed_tax||""} onChange={e=>setForm(p=>({...p,ytd_fed_tax:e.target.value}))} placeholder="0.00" />
-            <Input label="YTD Provincial Tax ($)" type="number" value={form.ytd_prov_tax||""} onChange={e=>setForm(p=>({...p,ytd_prov_tax:e.target.value}))} placeholder="0.00" />
-            <Input label="YTD Total Income Tax ($)" type="number" value={((parseFloat(form.ytd_fed_tax)||0)+(parseFloat(form.ytd_prov_tax)||0)).toFixed(2)||""} readOnly placeholder="Auto-calculated" className="bg-blue-50" />
+            <Input label="YTD Total Income Tax ($)" type="number" value={form.ytd_fed_tax||""} onChange={e=>{ const half = (parseFloat(e.target.value)||0)/2; setForm(p=>({...p,ytd_fed_tax:half.toFixed(2),ytd_prov_tax:half.toFixed(2)})); }} placeholder="0.00" />
             <Input label="YTD Vacation Pay ($)" type="number" value={form.ytd_vac||""} onChange={e=>setForm(p=>({...p,ytd_vac:e.target.value}))} placeholder="0.00" />
           </div>
         </div>
