@@ -1926,6 +1926,7 @@ function RunPayrollPage({ company, setPage }) {
     await supabase.from('payroll_runs').delete().eq('company_id', company.id).eq('period', periodLabel);
     setOverwriteMode(false);
   }
+  const isRerun = overwriteMode;
   const { data } = await supabase
     .from('payroll_runs')
     .insert([{
@@ -1972,7 +1973,7 @@ function RunPayrollPage({ company, setPage }) {
     .single();
   if (data) {
     setProcessed(true);
-    // Fetch fresh YTD values from DB before accumulating to avoid stale state
+    if (isRerun) { setSaving(false); return; }
     for (const r of rows) {
       const { data: freshEmp } = await supabase
         .from('employees')
