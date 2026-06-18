@@ -2050,12 +2050,12 @@ function PaystubsPage({ company }) {
     pdf.text('Employer CPP (matched)', 18, y);
     pdf.setTextColor(30,64,175);
     pdf.text((+selectedEmp.er_cpp||0).toFixed(2), 120, y);
-    pdf.text((+selectedEmp.ytd_er_cpp||0).toFixed(2), 165, y);
+    pdf.text((+(selectedEmp.ytd_er_cpp || selectedEmp.er_cpp || 0)).toFixed(2), 165, y);
     pdf.setTextColor(0,0,0); y += 5;
     pdf.text('Employer EI (×1.4)', 18, y);
     pdf.setTextColor(30,64,175);
     pdf.text((+selectedEmp.er_ei||0).toFixed(2), 120, y);
-    pdf.text((+selectedEmp.ytd_er_ei||0).toFixed(2), 165, y);
+    pdf.text((+(selectedEmp.ytd_er_ei || selectedEmp.er_ei || 0)).toFixed(2), 165, y);
     pdf.setTextColor(0,0,0); y += 12;
 
     // ── Footer ───────────────────────────────────────────────────────────────
