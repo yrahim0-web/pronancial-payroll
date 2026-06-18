@@ -1117,25 +1117,87 @@ useEffect(() => {
   fetchEmployees();
 }, [company.id]);
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "" });
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+
+  const handlePaystubImport = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImporting(true);
+    setImportError("");
+    try {
+      const XLSX = await import('xlsx');
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      // Flatten all cell values for fuzzy searching
+      const flat = rows.flat().map(v => String(v).trim());
+      const findAfterLabel = (labels) => {
+        for (const label of labels) {
+          const idx = flat.findIndex(v => v.toLowerCase().includes(label.toLowerCase()));
+          if (idx !== -1 && flat[idx + 1] !== undefined) {
+            const val = String(flat[idx + 1]).replace(/[$,()]/g, "").trim();
+            if (val && !isNaN(parseFloat(val))) return val;
+          }
+        }
+        return "";
+      };
+      const findText = (labels) => {
+        for (const label of labels) {
+          const idx = flat.findIndex(v => v.toLowerCase().includes(label.toLowerCase()));
+          if (idx !== -1 && flat[idx + 1]) return String(flat[idx + 1]).trim();
+        }
+        return "";
+      };
+      // Try to extract employee name
+      const fullName = findText(["employee name", "employee", "name"]);
+      const nameParts = fullName ? fullName.split(" ") : ["", ""];
+      setForm(prev => ({
+        ...prev,
+        firstName: nameParts[0] || prev.firstName,
+        lastName: nameParts.slice(1).join(" ") || prev.lastName,
+        ytd_gross:    findAfterLabel(["ytd gross", "gross ytd", "total gross", "year to date gross", "ytd earnings"]) || prev.ytd_gross,
+        ytd_cpp:      findAfterLabel(["ytd cpp", "cpp ytd", "cpp contributions", "canada pension"]) || prev.ytd_cpp,
+        ytd_ei:       findAfterLabel(["ytd ei", "ei ytd", "ei premiums", "employment insurance"]) || prev.ytd_ei,
+        ytd_fed_tax:  findAfterLabel(["ytd federal", "federal tax", "fed tax", "federal income"]) || prev.ytd_fed_tax,
+        ytd_prov_tax: findAfterLabel(["ytd provincial", "provincial tax", "prov tax", "provincial income"]) || prev.ytd_prov_tax,
+        ytd_vac:      findAfterLabel(["ytd vacation", "vacation pay", "vac pay", "vacation ytd"]) || prev.ytd_vac,
+      }));
+    } catch (err) {
+      setImportError("Could not read file. Please ensure it is a valid Excel (.xlsx) file.");
+    }
+    setImporting(false);
+  };
 
   const filtered = employees.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
   const addEmployee = async () => {
     if (editEmployee) {
+      const updatePayload = {
+        name: `${form.firstName} ${form.lastName}`,
+        province: form.province,
+        type: form.type,
+        rate: form.type === "Salary" ? parseFloat(form.salary)||60000 : parseFloat(form.rate)||20,
+        email: form.email,
+        hire_date: form.hireDate,
+        position: form.position || "Employee",
+        td1_fed: parseFloat(form.td1Fed) || 16452,
+        td1_prov: form.td1Prov ? parseFloat(form.td1Prov) : null,
+        vac_rate: (form.vacRate || "4") + "%",
+        payroll_schedule: form.paySchedule || "Semi-monthly",
+      };
+      // Only update YTD fields if the user explicitly changed them (non-empty)
+      if (form.ytd_gross !== "") updatePayload.ytd_gross = parseFloat(form.ytd_gross) || 0;
+      if (form.ytd_cpp !== "") updatePayload.ytd_cpp = parseFloat(form.ytd_cpp) || 0;
+      if (form.ytd_ei !== "") updatePayload.ytd_ei = parseFloat(form.ytd_ei) || 0;
+      if (form.ytd_fed_tax !== "") updatePayload.ytd_fed_tax = parseFloat(form.ytd_fed_tax) || 0;
+      if (form.ytd_prov_tax !== "") updatePayload.ytd_prov_tax = parseFloat(form.ytd_prov_tax) || 0;
+      if (form.ytd_vac !== "") updatePayload.ytd_vac = parseFloat(form.ytd_vac) || 0;
+      if (form.ytd_er_cpp !== "") updatePayload.ytd_er_cpp = parseFloat(form.ytd_er_cpp) || 0;
+      if (form.ytd_er_ei !== "") updatePayload.ytd_er_ei = parseFloat(form.ytd_er_ei) || 0;
       const { data } = await supabase
         .from('employees')
-        .update({
-          name: `${form.firstName} ${form.lastName}`,
-          province: form.province,
-          type: form.type,
-          rate: form.type === "Salary" ? parseFloat(form.salary)||60000 : parseFloat(form.rate)||20,
-          email: form.email,
-          hire_date: form.hireDate,
-          position: form.position || "Employee",
-          td1_fed: parseFloat(form.td1Fed) || 16452,
-          td1_prov: parseFloat(form.td1Prov) || 12399,
-          vac_rate: (form.vacRate || "4") + "%",
-          payroll_schedule: form.paySchedule || "Semi-monthly",
-        })
+        .update(updatePayload)
         .eq('id', editEmployee.id)
         .select()
         .single();
@@ -1231,7 +1293,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?e.rate:"", rate: e.type==="Hourly"?e.rate:"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||12399), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%","") }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.ytd_gross||""), ytd_cpp: String(e.ytd_cpp||""), ytd_ei: String(e.ytd_ei||""), ytd_fed_tax: String(e.ytd_fed_tax||""), ytd_prov_tax: String(e.ytd_prov_tax||""), ytd_vac: String(e.ytd_vac||""), ytd_er_cpp: String(e.ytd_er_cpp||""), ytd_er_ei: String(e.ytd_er_ei||"") }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -1273,6 +1335,18 @@ useEffect(() => {
 <Input label="Provincial TD1 Claim ($)" type="number" value={form.td1Prov} onChange={e=>setForm(p=>({...p,td1Prov:e.target.value}))} placeholder="12989" />
           <Input label="Position / Job Title" placeholder="Software Developer" />
         </div>
+        {!editEmployee && (
+          <div className="col-span-2 border border-dashed border-blue-200 bg-blue-50 rounded-xl p-4 mt-2">
+            <p className="text-xs font-semibold text-blue-700 mb-1">📂 Import from Previous Paystub (Excel)</p>
+            <p className="text-xs text-blue-500 mb-2">Upload an .xlsx paystub from another payroll system to auto-fill YTD balances.</p>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <span className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">{importing ? "Reading..." : "Choose Excel File"}</span>
+              <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handlePaystubImport} disabled={importing} />
+              <span className="text-xs text-blue-400">Supports .xlsx, .xls</span>
+            </label>
+            {importError && <p className="text-xs text-red-500 mt-2">{importError}</p>}
+          </div>
+        )}
         <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Opening YTD Balances</p>
           <p className="text-xs text-gray-400 mb-3">Enter existing year-to-date balances if employee is mid-year transfer from another payroll system.</p>
@@ -1467,8 +1541,10 @@ function RunPayrollPage({ company, setPage }) {
   }, [company.id]);
   const [hours, setHours] = useState({});
   const [processed, setProcessed] = useState(false);
-const [saving, setSaving] = useState(false);
-const [showPreview, setShowPreview] = useState(false); 
+  const [saving, setSaving] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState(false);
+  const [overwriteMode, setOverwriteMode] = useState(false); 
   const [period] = useState("Jun 1–15, 2025");
 
   const filteredEmps = emps.filter(e => (e.payroll_schedule || "Bi-weekly") === selectedFreq);
@@ -1628,7 +1704,7 @@ const [showPreview, setShowPreview] = useState(false);
               <td className="px-3 py-3 text-red-500">${totals.tax.toFixed(2)}</td>
               <td className="px-3 py-3 text-emerald-700">${totals.net.toFixed(2)}</td>
             </tr></tfoot>
-          </table>
+          </table> 
         </div>
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1662,6 +1738,26 @@ const [showPreview, setShowPreview] = useState(false);
             <button className="w-full py-2 border border-blue-600 text-blue-600 rounded-xl text-sm hover:bg-blue-50 transition-colors"onClick={() => setShowPreview(true)}>Preview Payroll</button>
             <button onClick={async () => {
   setSaving(true);
+  // Check for existing run in this period
+  const periodLabel = (() => { const pl = getPeriodList(selectedFreq); const p = pl[+selectedPeriod-1]; return p ? `Period ${p.period}: ${p.start} – ${p.end}` : ''; })();
+  if (!overwriteMode) {
+    const { data: existing } = await supabase
+      .from('payroll_runs')
+      .select('id')
+      .eq('company_id', company.id)
+      .eq('period', periodLabel)
+      .maybeSingle();
+    if (existing) {
+      setSaving(false);
+      setDuplicateWarning(true);
+      return;
+    }
+  }
+  if (overwriteMode) {
+    const periodLabelOw = (() => { const pl = getPeriodList(selectedFreq); const p = pl[+selectedPeriod-1]; return p ? `Period ${p.period}: ${p.start} – ${p.end}` : ''; })();
+    await supabase.from('payroll_runs').delete().eq('company_id', company.id).eq('period', periodLabelOw);
+    setOverwriteMode(false);
+  }
   const { data } = await supabase
     .from('payroll_runs')
     .insert([{
@@ -1705,15 +1801,23 @@ const [showPreview, setShowPreview] = useState(false);
     .single();
   if (data) {
     setProcessed(true);
-    // Update each employee's YTD in database
+    // Fetch fresh YTD values from DB before accumulating to avoid stale state
     for (const r of rows) {
+      const { data: freshEmp } = await supabase
+        .from('employees')
+        .select('ytd_gross,ytd_cpp,ytd_ei,ytd_fed_tax,ytd_prov_tax,ytd_vac,ytd_er_cpp,ytd_er_ei')
+        .eq('id', r.id)
+        .single();
+      const base = freshEmp || {};
       await supabase.from('employees').update({
-        ytd_gross:    +((r.ytd_gross    || 0) + r.gross).toFixed(2),
-        ytd_cpp:      +((r.ytd_cpp      || 0) + r.cpp).toFixed(2),
-        ytd_ei:       +((r.ytd_ei       || 0) + r.ei).toFixed(2),
-        ytd_fed_tax:  +((r.ytd_fed_tax  || 0) + (r.fedTax || 0)).toFixed(2),
-        ytd_prov_tax: +((r.ytd_prov_tax || 0) + (r.provTax || 0)).toFixed(2),
-        ytd_vac:      +((r.ytd_vac      || 0) + r.vacPay).toFixed(2),
+        ytd_gross:    +((base.ytd_gross    || 0) + r.gross).toFixed(2),
+        ytd_cpp:      +((base.ytd_cpp      || 0) + r.cpp).toFixed(2),
+        ytd_ei:       +((base.ytd_ei       || 0) + r.ei).toFixed(2),
+        ytd_fed_tax:  +((base.ytd_fed_tax  || 0) + (r.fedTax || 0)).toFixed(2),
+        ytd_prov_tax: +((base.ytd_prov_tax || 0) + (r.provTax || 0)).toFixed(2),
+        ytd_vac:      +((base.ytd_vac      || 0) + r.vacPay).toFixed(2),
+        ytd_er_cpp:   +((base.ytd_er_cpp   || 0) + (r.cpp || 0)).toFixed(2),
+        ytd_er_ei:    +((base.ytd_er_ei    || 0) + ((r.ei || 0) * 1.4)).toFixed(2),
         last_payroll: new Date().toISOString().split('T')[0]
       }).eq('id', r.id);
     }
@@ -1722,6 +1826,16 @@ const [showPreview, setShowPreview] = useState(false);
 }} disabled={processed || saving || !selectedPeriod} className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl text-sm font-medium transition-colors">
               {processed ? "Payroll Processed ✓" : saving ? "Saving..." : !selectedPeriod ? "Select Pay Period First" : "Process Payroll"}
             </button>
+            {duplicateWarning && (
+              <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                <p className="font-semibold mb-1">⚠️ Duplicate Period Detected</p>
+                <p className="mb-2">Payroll records already exist for this pay period. Would you like to update the existing paystubs instead of creating new ones?</p>
+                <div className="flex gap-2">
+                  <button onClick={() => { setDuplicateWarning(false); setOverwriteMode(true); }} className="px-3 py-1 bg-amber-600 text-white rounded-lg text-xs font-medium hover:bg-amber-700">Update Existing</button>
+                  <button onClick={() => setDuplicateWarning(false)} className="px-3 py-1 border border-amber-300 rounded-lg text-xs text-amber-700 hover:bg-amber-100">Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
       </div>
