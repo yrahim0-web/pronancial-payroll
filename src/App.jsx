@@ -1597,12 +1597,6 @@ const [showPreview, setShowPreview] = useState(false);
                       </td>
                     </>
                   )}
-                      <td key={field} className="px-3 py-3">
-                        <input type="number" min="0" value={hours[e.id]?.[field]||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), [field]:ev.target.value}}))}
-                          className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
-                      </td>
-                    ))
-                  )}
                   <td className="px-3 py-3">
                     <select value={hours[e.id]?.vacRate||"4%"} onChange={ev=>setHours(p=>({...p,[e.id]:{...(p[e.id]||{}),vacRate:ev.target.value}}))}
                       disabled={processed} className="w-16 px-1 py-1 text-xs border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-400">
