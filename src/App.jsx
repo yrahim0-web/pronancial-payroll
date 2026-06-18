@@ -1116,7 +1116,7 @@ useEffect(() => {
   };
   fetchEmployees();
 }, [company.id]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "", ytd_base_earnings: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "", ytd_base_earnings: "", ytd_tax: "" });
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
 
@@ -1231,6 +1231,7 @@ useEffect(() => {
         ytd_gross:         ytdGross || prev.ytd_gross,
         ytd_cpp:           ytdCPP   || prev.ytd_cpp,
         ytd_ei:            ytdEI    || prev.ytd_ei,
+        ytd_tax:           ytdFedTax || prev.ytd_tax,
         ytd_fed_tax:       ytdFedTax ? (parseFloat(ytdFedTax)/2).toFixed(2) : prev.ytd_fed_tax,
         ytd_prov_tax:      ytdFedTax ? (parseFloat(ytdFedTax)/2).toFixed(2) : prev.ytd_prov_tax,
         ytd_vac:           ytdVac   || prev.ytd_vac,
@@ -1368,7 +1369,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.ytd_gross||""), ytd_cpp: String(e.ytd_cpp||""), ytd_ei: String(e.ytd_ei||""), ytd_fed_tax: String(e.ytd_fed_tax||""), ytd_prov_tax: String(e.ytd_prov_tax||""), ytd_vac: String(e.ytd_vac||""), ytd_er_cpp: String(e.ytd_er_cpp||""), ytd_er_ei: String(e.ytd_er_ei||""), ytd_base_earnings: String(e.ytd_base_earnings||"") }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.ytd_gross||""), ytd_cpp: String(e.ytd_cpp||""), ytd_ei: String(e.ytd_ei||""), ytd_fed_tax: String(e.ytd_fed_tax||""), ytd_prov_tax: String(e.ytd_prov_tax||""), ytd_vac: String(e.ytd_vac||""), ytd_er_cpp: String(e.ytd_er_cpp||""), ytd_er_ei: String(e.ytd_er_ei||""), ytd_base_earnings: String(e.ytd_base_earnings||""), ytd_tax: String(((e.ytd_fed_tax||0)+(e.ytd_prov_tax||0)).toFixed(2)) }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -1428,7 +1429,7 @@ useEffect(() => {
           <Input label="YTD Gross ($)" type="number" value={form.ytd_gross||""} onChange={e=>setForm(p=>({...p,ytd_gross:e.target.value}))} placeholder="0.00" />
             <Input label="YTD CPP ($)" type="number" value={form.ytd_cpp||""} onChange={e=>setForm(p=>({...p,ytd_cpp:e.target.value}))} placeholder="0.00" />
             <Input label="YTD EI ($)" type="number" value={form.ytd_ei||""} onChange={e=>setForm(p=>({...p,ytd_ei:e.target.value}))} placeholder="0.00" />
-            <Input label="YTD Total Income Tax ($)" type="number" value={form.ytd_fed_tax||""} onChange={e=>{ const half = (parseFloat(e.target.value)||0)/2; setForm(p=>({...p,ytd_fed_tax:half.toFixed(2),ytd_prov_tax:half.toFixed(2)})); }} placeholder="0.00" />
+            <Input label="YTD Total Income Tax ($)" type="number" value={form.ytd_tax||""} onChange={e=>{ const half = (parseFloat(e.target.value)||0)/2; setForm(p=>({...p,ytd_tax:e.target.value,ytd_fed_tax:half.toFixed(2),ytd_prov_tax:half.toFixed(2)})); }} placeholder="0.00" />
             <Input label="YTD Vacation Pay ($)" type="number" value={form.ytd_vac||""} onChange={e=>setForm(p=>({...p,ytd_vac:e.target.value}))} placeholder="0.00" />
           </div>
         </div>
