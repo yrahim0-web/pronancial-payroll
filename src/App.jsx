@@ -2269,12 +2269,6 @@ function PaystubsPage({ company }) {
       pdf.save('paystub-'+(selectedEmp.name||'emp').replace(/ /g,'-')+'-'+(selectedRun.pay_date||'')+'.pdf');
     } catch(err) { console.error('PDF error:',err); alert('PDF failed: '+err.message); }
   };
-    if (!selectedEmp || !selectedRun) return;
-    try {
-      const { default: jsPDF } = await import('jspdf');
-      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const W = 297; const H = 210;
-      const rText = (text, x, y) => { const w = pdf.getStringUnitWidth(String(text)) * pdf.getFontSize() / pdf.internal.scaleFactor; pdf.text(String(text), x - w, y); };
       // Header
       pdf.setFillColor(31,41,55); pdf.rect(0,0,W,18,'F');
       pdf.setTextColor(255,255,255); pdf.setFontSize(11); pdf.setFont('helvetica','bold');
