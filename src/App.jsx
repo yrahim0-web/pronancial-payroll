@@ -1116,7 +1116,7 @@ useEffect(() => {
   };
   fetchEmployees();
 }, [company.id]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "", ytd_reg_hrs: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "", ytd_base_earnings: "" });
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
 
@@ -1250,7 +1250,7 @@ useEffect(() => {
       if (form.ytd_vac !== "") updatePayload.ytd_vac = parseFloat(form.ytd_vac) || 0;
       if (form.ytd_er_cpp !== "") updatePayload.ytd_er_cpp = parseFloat(form.ytd_er_cpp) || 0;
       if (form.ytd_er_ei !== "") updatePayload.ytd_er_ei = parseFloat(form.ytd_er_ei) || 0;
-      if (form.ytd_reg_hrs !== "") updatePayload.ytd_reg_hrs = parseFloat(form.ytd_reg_hrs) || 0;
+      if (form.ytd_base_earnings !== "") updatePayload.ytd_base_earnings = parseFloat(form.ytd_base_earnings) || 0;
       const { data } = await supabase
         .from('employees')
         .update(updatePayload)
@@ -1288,7 +1288,7 @@ useEffect(() => {
           ytd_vac: parseFloat(form.ytd_vac) || 0,
           ytd_er_cpp: parseFloat(form.ytd_er_cpp) || 0,
           ytd_er_ei: parseFloat(form.ytd_er_ei) || 0,
-          ytd_reg_hrs: parseFloat(form.ytd_reg_hrs) || 0
+          ytd_base_earnings: parseFloat(form.ytd_base_earnings) || 0
         }])
         .select()
         .single();
@@ -1350,7 +1350,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.ytd_gross||""), ytd_cpp: String(e.ytd_cpp||""), ytd_ei: String(e.ytd_ei||""), ytd_fed_tax: String(e.ytd_fed_tax||""), ytd_prov_tax: String(e.ytd_prov_tax||""), ytd_vac: String(e.ytd_vac||""), ytd_er_cpp: String(e.ytd_er_cpp||""), ytd_er_ei: String(e.ytd_er_ei||""), ytd_reg_hrs: String(e.ytd_reg_hrs||"") }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.ytd_gross||""), ytd_cpp: String(e.ytd_cpp||""), ytd_ei: String(e.ytd_ei||""), ytd_fed_tax: String(e.ytd_fed_tax||""), ytd_prov_tax: String(e.ytd_prov_tax||""), ytd_vac: String(e.ytd_vac||""), ytd_er_cpp: String(e.ytd_er_cpp||""), ytd_er_ei: String(e.ytd_er_ei||""), ytd_base_earnings: String(e.ytd_base_earnings||"") }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -1406,7 +1406,7 @@ useEffect(() => {
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Opening YTD Balances</p>
           <p className="text-xs text-gray-400 mb-3">Enter existing year-to-date balances if employee is mid-year transfer from another payroll system.</p>
           <div className="grid grid-cols-3 gap-4">
-            <Input label="YTD Regular Hours" type="number" value={form.ytd_reg_hrs||""} onChange={e=>setForm(p=>({...p,ytd_reg_hrs:e.target.value}))} placeholder="0" />
+            <Input label="YTD Base Earnings ($)" type="number" value={form.ytd_base_earnings||""} onChange={e=>setForm(p=>({...p,ytd_base_earnings:e.target.value}))} placeholder="0.00" />
           <Input label="YTD Gross ($)" type="number" value={form.ytd_gross||""} onChange={e=>setForm(p=>({...p,ytd_gross:e.target.value}))} placeholder="0.00" />
             <Input label="YTD CPP ($)" type="number" value={form.ytd_cpp||""} onChange={e=>setForm(p=>({...p,ytd_cpp:e.target.value}))} placeholder="0.00" />
             <Input label="YTD EI ($)" type="number" value={form.ytd_ei||""} onChange={e=>setForm(p=>({...p,ytd_ei:e.target.value}))} placeholder="0.00" />
@@ -1869,6 +1869,7 @@ function RunPayrollPage({ company, setPage }) {
         ytd_ei:       +((base.ytd_ei       || 0) + r.ei).toFixed(2),
         ytd_fed_tax:  +((base.ytd_fed_tax  || 0) + (r.fedTax || 0)).toFixed(2),
         ytd_prov_tax: +((base.ytd_prov_tax || 0) + (r.provTax || 0)).toFixed(2),
+        ytd_base_earnings: +((base.ytd_base_earnings || 0) + (r.baseEarnings || 0)).toFixed(2),
         ytd_vac:      +((base.ytd_vac      || 0) + r.vacPay).toFixed(2),
         ytd_er_cpp:   +((base.ytd_er_cpp   || 0) + (r.cpp || 0)).toFixed(2),
         ytd_er_ei:    +((base.ytd_er_ei    || 0) + ((r.ei || 0) * 1.4)).toFixed(2),
@@ -1958,7 +1959,7 @@ function PaystubsPage({ company }) {
     pdf.text('Base Earnings', 18, y);
     pdf.text(String(hrs), 90, y);
     pdf.text(String((+selectedEmp.base_earnings||0).toFixed(2)), 120, y);
-    pdf.text('—', 165, y); y += 5;
+    pdf.text(String((+selectedEmp.ytd_base_earnings||0).toFixed(2)), 165, y); y += 5;
     pdf.text('Vacation Pay (4%)', 18, y);
     pdf.text(String((+selectedEmp.vac_pay||0).toFixed(2)), 120, y);
     pdf.text(String((+selectedEmp.ytd_vac||0).toFixed(2)), 165, y); y += 5;
@@ -2109,7 +2110,7 @@ function PaystubsPage({ company }) {
                   <tbody className="divide-y divide-gray-50">
                     <tr className="bg-green-50"><td className="px-5 py-1.5 text-xs font-semibold text-green-700" colSpan={3}>Earnings</td></tr>
                     {selectedEmp.emp_type === "Hourly" && <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Hours Worked</td><td className="px-5 py-2.5 text-right text-gray-700">{+selectedEmp.reg_hrs||0} hrs @ ${+selectedEmp.rate||0}/hr</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>}
-                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Base Earnings</td><td className="px-5 py-2.5 text-right text-gray-700">{(+selectedEmp.base_earnings||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Base Earnings</td><td className="px-5 py-2.5 text-right text-gray-700">{(+selectedEmp.base_earnings||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">{(+selectedEmp.ytd_base_earnings||0).toFixed(2)}</td></tr>
                     <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Vacation Pay</td><td className="px-5 py-2.5 text-right text-purple-600">{(+selectedEmp.vac_pay||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">{(+selectedEmp.ytd_vac||0).toFixed(2)}</td></tr>
                     <tr className="bg-gray-50"><td className="px-5 py-2.5 font-semibold text-gray-800">Gross Earnings</td><td className="px-5 py-2.5 text-right font-semibold text-gray-900">{(+selectedEmp.gross||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right font-semibold text-gray-700">{(+selectedEmp.ytd_gross||0).toFixed(2)}</td></tr>
                     <tr className="bg-red-50"><td className="px-5 py-1.5 text-xs font-semibold text-red-700" colSpan={3}>Employee Deductions</td></tr>
