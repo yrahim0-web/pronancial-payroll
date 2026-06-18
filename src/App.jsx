@@ -2169,10 +2169,41 @@ function PaystubsPage({ company }) {
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Select Employee</h3>
           <div className="space-y-1 mb-3">
             {runs.map(r => (
-              <button key={r.id} onClick={() => { setSelectedRun(r); setSelectedEmp(r.details?.[0]||null); }} className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-colors ${selectedRun?.id===r.id ? "bg-blue-600 text-white" : "hover:bg-gray-50 text-gray-700"}`}>
-                <p className="font-medium">{r.period}</p>
-                <p className={`text-xs ${selectedRun?.id===r.id?"text-blue-200":"text-gray-400"}`}>{r.pay_date}</p>
-              </button>
+              <div key={r.id} className={`flex items-center gap-1 rounded-xl transition-colors ${selectedRun?.id===r.id ? "bg-blue-600" : "hover:bg-gray-50"}`}>
+                <button onClick={() => { setSelectedRun(r); setSelectedEmp(r.details?.[0]||null); }} className="flex-1 text-left px-3 py-2 text-xs">
+                  <p className={`font-medium ${selectedRun?.id===r.id?"text-white":"text-gray-700"}`}>{r.period}</p>
+                  <p className={`text-xs ${selectedRun?.id===r.id?"text-blue-200":"text-gray-400"}`}>{r.pay_date}</p>
+                </button>
+                <button onClick={async () => {
+                  if (!window.confirm(`Delete payroll run for ${r.period}? This will reverse YTD values for all employees in this run.`)) return;
+                  // Reverse YTD for each employee in this run
+                  for (const detail of (r.details || [])) {
+                    const { data: freshEmp } = await supabase
+                      .from('employees')
+                      .select('ytd_gross,ytd_cpp,ytd_ei,ytd_fed_tax,ytd_prov_tax,ytd_vac,ytd_er_cpp,ytd_er_ei,ytd_base_earnings')
+                      .eq('id', detail.employee_id)
+                      .single();
+                    if (freshEmp) {
+                      await supabase.from('employees').update({
+                        ytd_gross:         +Math.max((freshEmp.ytd_gross||0)-(detail.gross||0),0).toFixed(2),
+                        ytd_cpp:           +Math.max((freshEmp.ytd_cpp||0)-(detail.cpp||0),0).toFixed(2),
+                        ytd_ei:            +Math.max((freshEmp.ytd_ei||0)-(detail.ei||0),0).toFixed(2),
+                        ytd_fed_tax:       +Math.max((freshEmp.ytd_fed_tax||0)-(detail.fed_tax||0),0).toFixed(2),
+                        ytd_prov_tax:      +Math.max((freshEmp.ytd_prov_tax||0)-(detail.prov_tax||0),0).toFixed(2),
+                        ytd_vac:           +Math.max((freshEmp.ytd_vac||0)-(detail.vac_pay||0),0).toFixed(2),
+                        ytd_er_cpp:        +Math.max((freshEmp.ytd_er_cpp||0)-(detail.er_cpp||0),0).toFixed(2),
+                        ytd_er_ei:         +Math.max((freshEmp.ytd_er_ei||0)-(detail.er_ei||0),0).toFixed(2),
+                        ytd_base_earnings: +Math.max((freshEmp.ytd_base_earnings||0)-(detail.base_earnings||0),0).toFixed(2),
+                      }).eq('id', detail.employee_id);
+                    }
+                  }
+                  await supabase.from('payroll_runs').delete().eq('id', r.id);
+                  setRuns(prev => prev.filter(x => x.id !== r.id));
+                  if (selectedRun?.id === r.id) { setSelectedRun(null); setSelectedEmp(null); }
+                }} className={`p-1.5 mr-1 rounded-lg transition-colors flex-shrink-0 ${selectedRun?.id===r.id?"text-blue-200 hover:text-white hover:bg-blue-700":"text-gray-300 hover:text-red-500 hover:bg-red-50"}`} title="Delete this run">
+                  <Trash2 size={12}/>
+                </button>
+              </div>
             ))}
           </div>
           {selectedRun?.details?.length > 0 && <>
