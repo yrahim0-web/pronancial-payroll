@@ -1336,7 +1336,7 @@ useEffect(() => {
           <Input label="Position / Job Title" placeholder="Software Developer" />
         </div>
         {!editEmployee && (
-          <div className="col-span-2 border border-dashed border-blue-200 bg-blue-50 rounded-xl p-4 mt-2">
+          <div className="border border-dashed border-blue-200 bg-blue-50 rounded-xl p-4 mt-2">
             <p className="text-xs font-semibold text-blue-700 mb-1">📂 Import from Previous Paystub (Excel)</p>
             <p className="text-xs text-blue-500 mb-2">Upload an .xlsx paystub from another payroll system to auto-fill YTD balances.</p>
             <label className="flex items-center gap-2 cursor-pointer">
@@ -1347,7 +1347,7 @@ useEffect(() => {
             {importError && <p className="text-xs text-red-500 mt-2">{importError}</p>}
           </div>
         )}
-        <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
+        <div className="border-t border-gray-100 pt-4 mt-2">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Opening YTD Balances</p>
           <p className="text-xs text-gray-400 mb-3">Enter existing year-to-date balances if employee is mid-year transfer from another payroll system.</p>
           <div className="grid grid-cols-3 gap-4">
@@ -1359,7 +1359,7 @@ useEffect(() => {
             <Input label="YTD Vacation Pay ($)" type="number" value={form.ytd_vac||""} onChange={e=>setForm(p=>({...p,ytd_vac:e.target.value}))} placeholder="0.00" />
           </div>
         </div>
-        <div className="col-span-2 border-t border-gray-100 pt-4 mt-2">
+        <div className="border-t border-gray-100 pt-4 mt-2">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Employer YTD Contributions</p>
           <p className="text-xs text-gray-400 mb-3">Enter employer year-to-date contributions if mid-year transfer.</p>
           <div className="grid grid-cols-3 gap-4">
@@ -1586,7 +1586,7 @@ function RunPayrollPage({ company, setPage }) {
           <select
             className="text-sm border border-gray-200 rounded-lg px-2 py-1 text-blue-600 font-medium focus:outline-none focus:ring-2 focus:ring-blue-300"
             value={selectedFreq}
-            onChange={e => { setSelectedFreq(e.target.value); setSelectedPeriod(null); }}
+            onChange={e => { setSelectedFreq(e.target.value); setSelectedPeriod(null); setProcessed(false); setDuplicateWarning(false); }}
           >
             <option value="Weekly">Weekly</option>
             <option value="Bi-weekly">Bi-weekly</option>
@@ -1597,7 +1597,7 @@ function RunPayrollPage({ company, setPage }) {
           <select
             className="text-sm border border-gray-200 rounded-lg px-2 py-1 text-blue-600 font-medium focus:outline-none focus:ring-2 focus:ring-blue-300"
             value={selectedPeriod || ""}
-            onChange={e => setSelectedPeriod(e.target.value)}
+            onChange={e => { setSelectedPeriod(e.target.value); setProcessed(false); setDuplicateWarning(false); }}
           >
             <option value="">-- Select Period --</option>
             {getPeriodList(selectedFreq).map(p => (
@@ -1754,8 +1754,7 @@ function RunPayrollPage({ company, setPage }) {
     }
   }
   if (overwriteMode) {
-    const periodLabelOw = (() => { const pl = getPeriodList(selectedFreq); const p = pl[+selectedPeriod-1]; return p ? `Period ${p.period}: ${p.start} – ${p.end}` : ''; })();
-    await supabase.from('payroll_runs').delete().eq('company_id', company.id).eq('period', periodLabelOw);
+    await supabase.from('payroll_runs').delete().eq('company_id', company.id).eq('period', periodLabel);
     setOverwriteMode(false);
   }
   const { data } = await supabase
@@ -2370,7 +2369,7 @@ useEffect(() => {
   };
   fetchCompanies();
 }, []);
-  const [selectedCompany, setSelectedCompany] = useState(COMPANIES[0]);
+  const [selectedCompany, setSelectedCompany] = useState(null);
   const [companyDropdown, setCompanyDropdown] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
