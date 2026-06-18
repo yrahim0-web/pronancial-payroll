@@ -232,6 +232,7 @@ function calcPayroll(
   otHrs,
   bonus,
   statHrs   = 0,
+  statMode  = "amount", // "amount" = flat dollars typed directly, "hours" = hours x rate (x1.5 for hourly)
   vacRate   = 0.04,
   payFreq   = "Semi-monthly",
   td1Fed    = 16452,   // employee's federal TD1 claim 2026
@@ -252,11 +253,15 @@ function calcPayroll(
   if (emp.type === "Hourly") {
     regularPay = reg * emp.rate;
     otPay      = ot  * emp.rate * 1.5;
-    statPay    = stat * emp.rate * 1.5;
+    statPay    = statMode === "hours" ? (stat * emp.rate * 1.5) : stat;
   } else {
     regularPay = emp.rate / PP;
-    const dailyRate = emp.rate / 261;
-    statPay    = stat * (dailyRate / 8) * 0.5;
+    if (statMode === "hours") {
+      const dailyRate = emp.rate / 261;
+      statPay = stat * (dailyRate / 8) * 0.5;
+    } else {
+      statPay = stat;
+    }
   }
 
   const baseEarnings = +(regularPay + otPay + statPay + bon).toFixed(2);
@@ -1448,7 +1453,7 @@ function RunPayrollPage({ company, setPage }) {
         data.forEach(e => {
           initHours[e.id] = {
             reg: e.type === "Salary" ? "80" : "0",
-            ot: "0", stat: "0", bonus: "0",
+            ot: "0", stat: "0", statMode: "amount", bonus: "0",
             vacRate: e.vac_rate || "4%"
           };
         });
@@ -1468,10 +1473,10 @@ const [showPreview, setShowPreview] = useState(false);
   const rows = filteredEmps.map(e => {
     const defaultReg = e.type === "Salary" ? "80" : "0";
     const defaultVac = (e.vac_rate || "4%").replace("%","");
-    const h = hours[e.id] || { reg: defaultReg, ot:"0", stat:"0", bonus:"0", vacRate: defaultVac + "%" };
+    const h = hours[e.id] || { reg: defaultReg, ot:"0", stat:"0", statMode:"amount", bonus:"0", vacRate: defaultVac + "%" };
     const fedTD1 = e.td1_fed || 16452;
     const provTD1 = e.td1_prov || null;
-    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, VAC_RATES[h.vacRate] ?? 0.04, selectedFreq, fedTD1, provTD1), ...h };
+    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, h.statMode || "amount", VAC_RATES[h.vacRate] ?? 0.04, selectedFreq, fedTD1, provTD1), ...h };
   });
 
   const totals = rows.reduce((a, r) => ({
@@ -1529,7 +1534,7 @@ const [showPreview, setShowPreview] = useState(false);
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-gray-50">
-              {["Employee","Reg Hrs","OT Hrs (1.5×)","Stat Hrs (1.5×)","Bonus","Vac %","Base Pay","Vac Pay","Gross","CPP","EI","Tax","Net Pay"].map(h=>(
+              {["Employee","Reg Hrs","OT Hrs (1.5×)","Stat Pay ($)","Bonus","Vac %","Base Pay","Vac Pay","Gross","CPP","EI","Tax","Net Pay"].map(h=>(
                 <th key={h} className="text-left px-3 py-3 whitespace-nowrap">{h}</th>
               ))}
             </tr></thead>
@@ -1545,18 +1550,53 @@ const [showPreview, setShowPreview] = useState(false);
                       <div><p className="font-medium text-gray-900 whitespace-nowrap">{e.name}</p><p className="text-xs text-gray-400">{e.type==="Salary"?`${e.rate.toLocaleString()}/yr`:`${e.rate}/hr`}</p></div>
                     </div>
                   </td>
-                  {e.type === "Salary" ? (
+                 {e.type === "Salary" ? (
                     <>
                       <td className="px-3 py-3 text-xs text-gray-400 italic">—</td>
                       <td className="px-3 py-3 text-xs text-gray-400 italic">—</td>
-                      <td className="px-3 py-3 text-xs text-gray-400 italic">—</td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-col gap-1">
+                          <input type="number" min="0" value={hours[e.id]?.stat||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), stat:ev.target.value}}))}
+                            className="w-16 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
+                          <select value={hours[e.id]?.statMode||"amount"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), statMode:ev.target.value}}))}
+                            disabled={processed} className="w-16 px-1 py-0.5 text-[10px] border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-400">
+                            <option value="amount">$ Amount</option>
+                            <option value="hours">Hours</option>
+                          </select>
+                        </div>
+                      </td>
                       <td className="px-3 py-3">
                         <input type="number" min="0" value={hours[e.id]?.bonus||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), bonus:ev.target.value}}))}
                           className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
                       </td>
                     </>
                   ) : (
-                    ["reg","ot","stat","bonus"].map(field => (
+                    <>
+                      <td className="px-3 py-3">
+                        <input type="number" min="0" value={hours[e.id]?.reg||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), reg:ev.target.value}}))}
+                          className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
+                      </td>
+                      <td className="px-3 py-3">
+                        <input type="number" min="0" value={hours[e.id]?.ot||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), ot:ev.target.value}}))}
+                          className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-col gap-1">
+                          <input type="number" min="0" value={hours[e.id]?.stat||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), stat:ev.target.value}}))}
+                            className="w-16 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
+                          <select value={hours[e.id]?.statMode||"amount"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), statMode:ev.target.value}}))}
+                            disabled={processed} className="w-16 px-1 py-0.5 text-[10px] border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-1 focus:ring-blue-400">
+                            <option value="amount">$ Amount</option>
+                            <option value="hours">Hours</option>
+                          </select>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <input type="number" min="0" value={hours[e.id]?.bonus||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), bonus:ev.target.value}}))}
+                          className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
+                      </td>
+                    </>
+                  )}
                       <td key={field} className="px-3 py-3">
                         <input type="number" min="0" value={hours[e.id]?.[field]||"0"} onChange={ev => setHours(p => ({...p, [e.id]:{...(p[e.id]||{}), [field]:ev.target.value}}))}
                           className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 text-center" disabled={processed} />
