@@ -265,11 +265,11 @@ function calcPayroll(
   }
 
   // Vacationable earnings = regular + OT only (excludes stat pay & bonus — matches CRA rules)
-  const vacationableEarnings = +(regularPay + otPay).toFixed(2);
+  const baseEarnings         = +regularPay.toFixed(2);                       // "Base Pay" = reg hrs × rate ONLY
+  const vacationableEarnings = +(regularPay + otPay).toFixed(2);             // regular + OT — used only for vacation pay calc
   const employmentEarnings   = +(regularPay + otPay + statPay + bon).toFixed(2);
-  const baseEarnings = vacationableEarnings;            // "Base Pay" = hours × rate (+OT) only
-  const vacPay       = +(vacationableEarnings * vacRate).toFixed(2);
-  const grossPeriod  = +(employmentEarnings + vacPay).toFixed(2);
+  const vacPay                = +(vacationableEarnings * vacRate).toFixed(2);
+  const grossPeriod           = +(employmentEarnings + vacPay).toFixed(2);
 
   // ── Step 2: CPP (T4127 Section A) ───────────────────────────────────────────
   // Annual CPP-pensionable earnings (gross × PP − basic exemption)
@@ -1537,7 +1537,7 @@ const [showPreview, setShowPreview] = useState(false);
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-gray-50">
-              {["Employee","Reg Hrs","OT Hrs (1.5×)","Stat Pay ($)","Bonus","Vac %","Base Pay","Vac Pay","Gross","CPP","EI","Tax","Net Pay"].map(h=>(
+              {["Employee","Reg Hrs","OT Hrs (1.5×)","Stat Pay ($)","Bonus","Vac %","Base Pay","OT Pay","Vac Pay","Gross","CPP","EI","Tax","Net Pay"].map(h=>(
                 <th key={h} className="text-left px-3 py-3 whitespace-nowrap">{h}</th>
               ))}
             </tr></thead>
@@ -1607,6 +1607,7 @@ const [showPreview, setShowPreview] = useState(false);
                     </select>
                   </td>
                   <td className="px-3 py-3 text-gray-700">${e.baseEarnings.toFixed(2)}</td>
+                  <td className="px-3 py-3 text-indigo-600 font-medium">${e.otPay.toFixed(2)}</td>
                   <td className="px-3 py-3 text-purple-600 font-medium">${e.vacPay.toFixed(2)}</td>
                   <td className="px-3 py-3 font-semibold text-gray-900">${e.gross.toFixed(2)}</td>
                   <td className="px-3 py-3 text-red-500">${e.cpp.toFixed(2)}</td>
@@ -1619,6 +1620,7 @@ const [showPreview, setShowPreview] = useState(false);
             <tfoot><tr className="bg-gray-50 font-semibold text-sm">
               <td className="px-3 py-3 text-gray-700" colSpan={6}>Totals</td>
               <td className="px-3 py-3 text-gray-700">${rows.reduce((a,r)=>a+r.baseEarnings,0).toFixed(2)}</td>
+              <td className="px-3 py-3 text-indigo-600">${rows.reduce((a,r)=>a+r.otPay,0).toFixed(2)}</td>
               <td className="px-3 py-3 text-purple-600">${rows.reduce((a,r)=>a+r.vacPay,0).toFixed(2)}</td>
               <td className="px-3 py-3 text-gray-900">${totals.gross.toFixed(2)}</td>
               <td className="px-3 py-3 text-red-500">${totals.cpp.toFixed(2)}</td>
