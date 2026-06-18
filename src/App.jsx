@@ -1205,19 +1205,37 @@ useEffect(() => {
       const fedTax  = findAfterLabel(["ytd federal", "federal tax", "fed tax", "federal income"]);
       const provTax = findAfterLabel(["ytd provincial", "provincial tax", "prov tax", "provincial income"]);
 
+      // From screenshot: SALARY row has AMOUNT=1462.43, YTD=15915.16
+      // CPP current=82.49 YTD=913.77, EI current=24.79 YTD=272.26
+      // FED.TAX current=164.71 YTD=1915.96
+      // Employer CPP current=82.49 YTD=913.77, Employer EI current=34.71 YTD=381.16
+      // VAC.PAY YTD=636.61, GROSS YTD=16703.54, NET YTD=13601.55
+
+      const ytdBaseEarnings = findAfterLabel(["salary", "base salary", "regular", "amount"]);
+      const ytdGross        = findAfterLabel(["year to date", "ytd gross", "gross pay", "16703", "total gross"]);
+      const ytdCPP          = findAfterLabel(["cpp"]);
+      const ytdEI           = findAfterLabel(["ei"]);
+      const ytdFedTax       = findAfterLabel(["fed.tax", "fed tax", "fedtax", "federal"]);
+      const ytdVac          = findAfterLabel(["vac.pay", "vac pay", "vacation"]);
+      const ytdErCPP        = findAfterLabel(["employer cpp", "er cpp"]);
+      const ytdErEI         = findAfterLabel(["employer ei", "er ei"]);
+      const ytdNet          = findAfterLabel(["net pay", "net"]);
+
       setForm(prev => ({
         ...prev,
-        firstName:    nameParts[0] || prev.firstName,
-        lastName:     nameParts.slice(1).join(" ") || prev.lastName,
-        salary:       extractedRate && parseFloat(extractedRate) > 1000 ? extractedRate : prev.salary,
-        rate:         extractedRate && parseFloat(extractedRate) <= 200  ? extractedRate : prev.rate,
-        ytd_gross:    findAfterLabel(["ytd gross", "gross ytd", "total gross", "year to date gross", "ytd earnings", "gross earnings"]) || prev.ytd_gross,
-        ytd_cpp:      findAfterLabel(["ytd cpp", "cpp ytd", "cpp contributions", "canada pension", "cpp"]) || prev.ytd_cpp,
-        ytd_ei:       findAfterLabel(["ytd ei", "ei ytd", "ei premiums", "employment insurance", "ei"]) || prev.ytd_ei,
-        ytd_fed_tax:  combinedTax ? (parseFloat(combinedTax)/2).toFixed(2) : fedTax || prev.ytd_fed_tax,
-        ytd_prov_tax: combinedTax ? (parseFloat(combinedTax)/2).toFixed(2) : provTax || prev.ytd_prov_tax,
-        ytd_vac:      findAfterLabel(["ytd vacation", "vacation pay", "vac pay", "vacation ytd", "vacation"]) || prev.ytd_vac,
-        ytd_reg_hrs:  findAfterLabel(["ytd hours", "total hours", "reg hrs", "regular hours", "hours worked"]) || prev.ytd_reg_hrs,
+        firstName:         nameParts[0] || prev.firstName,
+        lastName:          nameParts.slice(1).join(" ") || prev.lastName,
+        salary:            extractedRate && parseFloat(extractedRate) > 1000 ? extractedRate : prev.salary,
+        rate:              extractedRate && parseFloat(extractedRate) <= 200  ? extractedRate : prev.rate,
+        ytd_base_earnings: ytdBaseEarnings || prev.ytd_base_earnings,
+        ytd_gross:         ytdGross || prev.ytd_gross,
+        ytd_cpp:           ytdCPP   || prev.ytd_cpp,
+        ytd_ei:            ytdEI    || prev.ytd_ei,
+        ytd_fed_tax:       ytdFedTax ? (parseFloat(ytdFedTax)/2).toFixed(2) : prev.ytd_fed_tax,
+        ytd_prov_tax:      ytdFedTax ? (parseFloat(ytdFedTax)/2).toFixed(2) : prev.ytd_prov_tax,
+        ytd_vac:           ytdVac   || prev.ytd_vac,
+        ytd_er_cpp:        ytdErCPP || prev.ytd_er_cpp,
+        ytd_er_ei:         ytdErEI  || prev.ytd_er_ei,
       }));
     } catch (err) {
       setImportError("Could not read file. Please ensure it is a valid Excel (.xlsx) or PDF file.");
@@ -2008,10 +2026,12 @@ function PaystubsPage({ company }) {
     pdf.text('Employer CPP (matched)', 18, y);
     pdf.setTextColor(30,64,175);
     pdf.text((+selectedEmp.er_cpp||0).toFixed(2), 120, y);
+    pdf.text((+selectedEmp.ytd_er_cpp||0).toFixed(2), 165, y);
     pdf.setTextColor(0,0,0); y += 5;
     pdf.text('Employer EI (×1.4)', 18, y);
     pdf.setTextColor(30,64,175);
     pdf.text((+selectedEmp.er_ei||0).toFixed(2), 120, y);
+    pdf.text((+selectedEmp.ytd_er_ei||0).toFixed(2), 165, y);
     pdf.setTextColor(0,0,0); y += 12;
 
     // ── Footer ───────────────────────────────────────────────────────────────
@@ -2119,8 +2139,8 @@ function PaystubsPage({ company }) {
                     <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Income Tax (Federal + Provincial)</td><td className="px-5 py-2.5 text-right text-red-500">({((+selectedEmp.fed_tax||0)+(+selectedEmp.prov_tax||0)).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({((+selectedEmp.ytd_fed_tax||0)+(+selectedEmp.ytd_prov_tax||0)).toFixed(2)})</td></tr>
                     <tr className="bg-blue-50"><td className="px-5 py-3 font-bold text-gray-900">Net Pay</td><td className="px-5 py-3 text-right font-bold text-emerald-700 text-base">${(+selectedEmp.net||0).toFixed(2)}</td><td className="px-5 py-3 text-right font-semibold text-gray-700">${((+selectedEmp.ytd_gross||0)-(+selectedEmp.ytd_cpp||0)-(+selectedEmp.ytd_ei||0)-(+selectedEmp.ytd_fed_tax||0)-(+selectedEmp.ytd_prov_tax||0)).toFixed(2)}</td></tr>
                     <tr className="bg-amber-50"><td className="px-5 py-1.5 text-xs font-semibold text-amber-700" colSpan={3}>Employer Contributions</td></tr>
-                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Employer CPP (matched)</td><td className="px-5 py-2.5 text-right text-amber-600">{(+selectedEmp.er_cpp||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>
-                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Employer EI (×1.4)</td><td className="px-5 py-2.5 text-right text-amber-600">{(+selectedEmp.er_ei||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Employer CPP (matched)</td><td className="px-5 py-2.5 text-right text-amber-600">{(+selectedEmp.er_cpp||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">{(+selectedEmp.ytd_er_cpp||0).toFixed(2)}</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Employer EI (×1.4)</td><td className="px-5 py-2.5 text-right text-amber-600">{(+selectedEmp.er_ei||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">{(+selectedEmp.ytd_er_ei||0).toFixed(2)}</td></tr>
                   </tbody>
                 </table>
               </div>
