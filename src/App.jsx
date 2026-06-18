@@ -1851,6 +1851,37 @@ function RunPayrollPage({ company, setPage }) {
     }
   }
   if (overwriteMode) {
+    // Fetch the existing run to reverse its YTD contributions before deleting
+    const { data: existingRun } = await supabase
+      .from('payroll_runs')
+      .select('*')
+      .eq('company_id', company.id)
+      .eq('period', periodLabel)
+      .maybeSingle();
+
+    if (existingRun?.details) {
+      for (const oldDetail of existingRun.details) {
+        const { data: freshEmp } = await supabase
+          .from('employees')
+          .select('ytd_gross,ytd_cpp,ytd_ei,ytd_fed_tax,ytd_prov_tax,ytd_vac,ytd_er_cpp,ytd_er_ei,ytd_base_earnings')
+          .eq('id', oldDetail.employee_id)
+          .single();
+        if (freshEmp) {
+          await supabase.from('employees').update({
+            ytd_gross:         +Math.max((freshEmp.ytd_gross         || 0) - (oldDetail.gross       || 0), 0).toFixed(2),
+            ytd_cpp:           +Math.max((freshEmp.ytd_cpp           || 0) - (oldDetail.cpp         || 0), 0).toFixed(2),
+            ytd_ei:            +Math.max((freshEmp.ytd_ei            || 0) - (oldDetail.ei          || 0), 0).toFixed(2),
+            ytd_fed_tax:       +Math.max((freshEmp.ytd_fed_tax       || 0) - (oldDetail.fed_tax     || 0), 0).toFixed(2),
+            ytd_prov_tax:      +Math.max((freshEmp.ytd_prov_tax      || 0) - (oldDetail.prov_tax    || 0), 0).toFixed(2),
+            ytd_vac:           +Math.max((freshEmp.ytd_vac           || 0) - (oldDetail.vac_pay     || 0), 0).toFixed(2),
+            ytd_er_cpp:        +Math.max((freshEmp.ytd_er_cpp        || 0) - (oldDetail.er_cpp      || 0), 0).toFixed(2),
+            ytd_er_ei:         +Math.max((freshEmp.ytd_er_ei         || 0) - (oldDetail.er_ei       || 0), 0).toFixed(2),
+            ytd_base_earnings: +Math.max((freshEmp.ytd_base_earnings || 0) - (oldDetail.base_earnings || 0), 0).toFixed(2),
+          }).eq('id', oldDetail.employee_id);
+        }
+      }
+    }
+
     await supabase.from('payroll_runs').delete().eq('company_id', company.id).eq('period', periodLabel);
     setOverwriteMode(false);
   }
