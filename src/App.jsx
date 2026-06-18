@@ -1921,7 +1921,10 @@ function RunPayrollPage({ company, setPage }) {
         ytd_ei:       +((r.ytd_ei       || 0) + r.ei).toFixed(2),
         ytd_fed_tax:  +((r.ytd_fed_tax  || 0) + (r.fedTax || 0)).toFixed(2),
         ytd_prov_tax: +((r.ytd_prov_tax || 0) + (r.provTax || 0)).toFixed(2),
-        ytd_vac:      +((r.ytd_vac      || 0) + r.vacPay).toFixed(2),
+        ytd_vac:           +((r.ytd_vac           || 0) + r.vacPay).toFixed(2),
+        ytd_base_earnings: +((r.ytd_base_earnings || 0) + (r.baseEarnings || 0)).toFixed(2),
+        ytd_er_cpp:        +((r.ytd_er_cpp        || 0) + (r.cpp || 0)).toFixed(2),
+        ytd_er_ei:         +((r.ytd_er_ei         || 0) + ((r.ei || 0) * 1.4)).toFixed(2),
       }))
     }])
     .select()
@@ -2032,7 +2035,7 @@ function PaystubsPage({ company }) {
     pdf.text('Base Earnings', 18, y);
     pdf.text(String(hrs), 90, y);
     pdf.text(String((+selectedEmp.base_earnings||0).toFixed(2)), 120, y);
-    pdf.text(String((+selectedEmp.ytd_base_earnings||0).toFixed(2)), 165, y); y += 5;
+    pdf.text(String((+(selectedEmp.ytd_base_earnings||0)).toFixed(2)), 165, y); y += 5;
     pdf.text('Vacation Pay (4%)', 18, y);
     pdf.text(String((+selectedEmp.vac_pay||0).toFixed(2)), 120, y);
     pdf.text(String((+selectedEmp.ytd_vac||0).toFixed(2)), 165, y); y += 5;
@@ -2081,12 +2084,12 @@ function PaystubsPage({ company }) {
     pdf.text('Employer CPP (matched)', 18, y);
     pdf.setTextColor(30,64,175);
     pdf.text((+selectedEmp.er_cpp||0).toFixed(2), 120, y);
-    pdf.text((+(selectedEmp.ytd_er_cpp || selectedEmp.er_cpp || 0)).toFixed(2), 165, y);
+    pdf.text((+(selectedEmp.ytd_er_cpp||0)).toFixed(2), 165, y);
     pdf.setTextColor(0,0,0); y += 5;
     pdf.text('Employer EI (×1.4)', 18, y);
     pdf.setTextColor(30,64,175);
     pdf.text((+selectedEmp.er_ei||0).toFixed(2), 120, y);
-    pdf.text((+(selectedEmp.ytd_er_ei || selectedEmp.er_ei || 0)).toFixed(2), 165, y);
+    pdf.text((+(selectedEmp.ytd_er_ei||0)).toFixed(2), 165, y);
     pdf.setTextColor(0,0,0); y += 12;
 
     // ── Footer ───────────────────────────────────────────────────────────────
