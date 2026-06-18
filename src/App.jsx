@@ -2029,6 +2029,251 @@ function PaystubsPage({ company }) {
       const { default: jsPDF } = await import('jspdf');
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       const W = 297; const H = 210;
+
+      // ── Colors ──
+      const DARK_GRAY = [64, 64, 64];
+      const MID_GRAY  = [128, 128, 128];
+      const LIGHT_GRAY= [192, 192, 192];
+      const WHITE     = [255, 255, 255];
+      const BLACK     = [0, 0, 0];
+      const GREEN     = [0, 128, 0];
+      const TEAL      = [0, 128, 128];
+      const BLUE      = [0, 0, 255];
+
+      // ── Data ──
+      const empName   = (selectedEmp.name||'').toUpperCase();
+      const sinMasked = '9' + '*'.repeat(7) + '2';
+      const periodStart = (selectedRun.period||'').split('–')[0]?.replace(/.*: /,'').trim() || '';
+      const periodEnd   = (selectedRun.period||'').split('–')[1]?.trim() || '';
+      const payDay      = selectedRun.pay_date || '';
+
+      const regHrs   = +(selectedEmp.reg_hrs||0);
+      const rate     = +(selectedEmp.rate||0);
+      const basePay  = +(selectedEmp.base_earnings||0);
+      const ytdBase  = +(selectedEmp.ytd_base_earnings||0);
+      const vacPay   = +(selectedEmp.vac_pay||0);
+      const ytdVac   = +(selectedEmp.ytd_vac||0);
+      const cpp      = +(selectedEmp.cpp||0);
+      const ytdCpp   = +(selectedEmp.ytd_cpp||0);
+      const ei       = +(selectedEmp.ei||0);
+      const ytdEi    = +(selectedEmp.ytd_ei||0);
+      const fedTax   = +(selectedEmp.fed_tax||0);
+      const ytdFed   = +(selectedEmp.ytd_fed_tax||0);
+      const erCpp    = +(selectedEmp.er_cpp||0);
+      const ytdErCpp = +(selectedEmp.ytd_er_cpp||0);
+      const erEi     = +(selectedEmp.er_ei||0);
+      const ytdErEi  = +(selectedEmp.ytd_er_ei||0);
+      const gross    = +(selectedEmp.gross||0);
+      const ytdGross = +(selectedEmp.ytd_gross||0);
+      const net      = +(selectedEmp.net||0);
+      const ytdNet   = ytdGross - ytdCpp - ytdEi - ytdFed - (+(selectedEmp.ytd_prov_tax||0));
+      const deductions    = cpp + ei + fedTax;
+      const ytdDeductions = ytdCpp + ytdEi + ytdFed + (+(selectedEmp.ytd_prov_tax||0));
+
+      // ── Helper: draw cell with background ──
+      const cell = (x, y, w, h, bg, text, textColor, fontSize, bold, align='left') => {
+        if (bg) { pdf.setFillColor(...bg); pdf.rect(x, y, w, h, 'F'); }
+        pdf.setDrawColor(...LIGHT_GRAY);
+        pdf.rect(x, y, w, h, 'S');
+        if (text !== undefined && text !== null) {
+          pdf.setFontSize(fontSize||8);
+          pdf.setFont('helvetica', bold?'bold':'normal');
+          pdf.setTextColor(...(textColor||BLACK));
+          const textStr = String(text);
+          if (align === 'right') {
+            const tw = pdf.getStringUnitWidth(textStr) * (fontSize||8) / pdf.internal.scaleFactor;
+            pdf.text(textStr, x + w - tw - 1, y + h/2 + (fontSize||8)*0.18);
+          } else if (align === 'center') {
+            const tw = pdf.getStringUnitWidth(textStr) * (fontSize||8) / pdf.internal.scaleFactor;
+            pdf.text(textStr, x + (w - tw)/2, y + h/2 + (fontSize||8)*0.18);
+          } else {
+            pdf.text(textStr, x + 1.5, y + h/2 + (fontSize||8)*0.18);
+          }
+        }
+      };
+
+      const fmt = (v) => Number(v).toFixed(2);
+
+      // ── ROW HEIGHTS & X POSITIONS ──
+      const ROW_H = 7;
+      const LEFT  = 5;
+
+      // Column x positions (matching screenshot layout)
+      const C = {
+        A: LEFT,       // label (SALARY, SICK HRS etc)
+        B: LEFT+22,    // HOURS
+        C: LEFT+34,    // RATE
+        D: LEFT+46,    // AMOUNT
+        E: LEFT+60,    // Y.T.D
+        F: LEFT+76,    // TYPE (deductions)
+        G: LEFT+98,    // CURRENT (emp deductions)
+        H: LEFT+116,   // Y.T.D (emp deductions)
+        I: LEFT+132,   // TYPE (employer)
+        J: LEFT+150,   // CURRENT (employer)
+        K: LEFT+168,   // Y.T.D (employer)
+      };
+      const CW = { // column widths
+        A:22, B:12, C:12, D:14, E:16,
+        F:22, G:18, H:18,
+        I:18, J:18, K:18,
+      };
+
+      // ── ROW 1: Employee name + header info ──
+      let y = 5;
+      // Name cell (spans A-E)
+      cell(C.A, y, CW.A+CW.B+CW.C+CW.D+CW.E, ROW_H, null, empName, BLACK, 9, true);
+      cell(C.F, y, CW.F, ROW_H, null, 'Employee #', BLACK, 7, false);
+      cell(C.G, y, CW.G, ROW_H, null, '0001', BLACK, 7, false);
+      cell(C.H, y, CW.H+CW.I, ROW_H, null, 'Period Start', BLACK, 7, false);
+      cell(C.J, y, CW.J, ROW_H, null, periodStart, BLACK, 7, false);
+      cell(C.K, y, CW.K, ROW_H, null, 'Pay Day', BLACK, 7, false);
+      // pay day value — extend right
+      cell(C.K+CW.K, y, 30, ROW_H, null, payDay, BLACK, 7, false);
+
+      // ── ROW 2: SIN + Period End ──
+      y += ROW_H;
+      cell(C.A, y, CW.A, ROW_H, null, 'SIN', BLACK, 7, false);
+      cell(C.B, y, CW.B+CW.C+CW.D+CW.E, ROW_H, null, sinMasked, BLACK, 7, false);
+      cell(C.F, y, CW.F+CW.G+CW.H, ROW_H, null, '', null, 7, false);
+      cell(C.I, y, CW.I, ROW_H, null, 'Period End', BLACK, 7, false);
+      cell(C.J, y, CW.J, ROW_H, null, periodEnd, BLACK, 7, false);
+
+      // ── ROW 3: Section headers ──
+      y += ROW_H;
+      cell(C.A, y, CW.A+CW.B+CW.C+CW.D+CW.E, ROW_H, LIGHT_GRAY, 'Statement of Earnings', BLACK, 8, true, 'center');
+      cell(C.F, y, CW.F+CW.G+CW.H+CW.I+CW.J+CW.K+18, ROW_H, LIGHT_GRAY, 'Employee Deductions and Employer Contributions', BLACK, 8, true, 'center');
+
+      // ── ROW 4: Column headers ──
+      y += ROW_H;
+      cell(C.A, y, CW.A, ROW_H, MID_GRAY, '', WHITE, 7, true);
+      cell(C.B, y, CW.B, ROW_H, MID_GRAY, 'HOURS', WHITE, 7, true, 'center');
+      cell(C.C, y, CW.C, ROW_H, MID_GRAY, 'RATE', WHITE, 7, true, 'center');
+      cell(C.D, y, CW.D, ROW_H, MID_GRAY, 'AMOUNT', WHITE, 7, true, 'center');
+      cell(C.E, y, CW.E, ROW_H, MID_GRAY, 'Y.T.D', WHITE, 7, true, 'center');
+      cell(C.F, y, CW.F, ROW_H, MID_GRAY, 'TYPE', WHITE, 7, true, 'center');
+      cell(C.G, y, CW.G, ROW_H, MID_GRAY, 'CURRENT', WHITE, 7, true, 'center');
+      cell(C.H, y, CW.H, ROW_H, MID_GRAY, 'Y.T.D', WHITE, 7, true, 'center');
+      cell(C.I, y, CW.I, ROW_H, MID_GRAY, 'TYPE', WHITE, 7, true, 'center');
+      cell(C.J, y, CW.J, ROW_H, MID_GRAY, 'CURRENT', WHITE, 7, true, 'center');
+      cell(C.K, y, CW.K+18, ROW_H, MID_GRAY, 'Y.T.D', WHITE, 7, true, 'center');
+
+      // ── ROW 5: SALARY ──
+      y += ROW_H;
+      cell(C.A, y, CW.A, ROW_H, null, selectedEmp.emp_type==='Salary'?'SALARY':'REGULAR', BLACK, 7, false);
+      cell(C.B, y, CW.B, ROW_H, null, fmt(regHrs), BLACK, 7, false, 'right');
+      cell(C.C, y, CW.C, ROW_H, null, '$'+fmt(rate), BLACK, 7, false, 'right');
+      cell(C.D, y, CW.D, ROW_H, null, fmt(basePay), BLACK, 7, false, 'right');
+      cell(C.E, y, CW.E, ROW_H, null, fmt(ytdBase), BLACK, 7, false, 'right');
+      cell(C.F, y, CW.F, ROW_H, null, 'FED.TAX', BLACK, 7, false);
+      cell(C.G, y, CW.G, ROW_H, null, fmt(fedTax), BLACK, 7, false, 'right');
+      cell(C.H, y, CW.H, ROW_H, null, fmt(ytdFed), BLACK, 7, false, 'right');
+      cell(C.I, y, CW.I, ROW_H, null, '', null, 7, false);
+      cell(C.J, y, CW.J, ROW_H, null, '0', BLACK, 7, false, 'right');
+      cell(C.K, y, CW.K+18, ROW_H, null, '0', BLACK, 7, false, 'right');
+
+      // ── ROW 6: SICK HRS ──
+      y += ROW_H;
+      cell(C.A, y, CW.A, ROW_H, null, 'SICK HRS', BLACK, 7, false);
+      cell(C.B, y, CW.B, ROW_H, null, '', null, 7, false);
+      cell(C.C, y, CW.C, ROW_H, null, '', null, 7, false);
+      cell(C.D, y, CW.D, ROW_H, null, '0.00', BLACK, 7, false, 'right');
+      cell(C.E, y, CW.E, ROW_H, null, '0.00', BLACK, 7, false, 'right');
+      cell(C.F, y, CW.F, ROW_H, null, 'CPP', BLACK, 7, false);
+      cell(C.G, y, CW.G, ROW_H, null, fmt(cpp), BLACK, 7, false, 'right');
+      cell(C.H, y, CW.H, ROW_H, null, fmt(ytdCpp), BLACK, 7, false, 'right');
+      cell(C.I, y, CW.I, ROW_H, null, 'CPP', BLACK, 7, false);
+      cell(C.J, y, CW.J, ROW_H, null, fmt(erCpp), BLACK, 7, false, 'right');
+      cell(C.K, y, CW.K+18, ROW_H, null, fmt(ytdErCpp), BLACK, 7, false, 'right');
+
+      // ── ROW 7: STAT ──
+      y += ROW_H;
+      cell(C.A, y, CW.A, ROW_H, null, 'STAT', TEAL, 7, false);
+      cell(C.B, y, CW.B, ROW_H, null, '', null, 7, false);
+      cell(C.C, y, CW.C, ROW_H, null, '', null, 7, false);
+      cell(C.D, y, CW.D, ROW_H, null, fmt(+(selectedEmp.stat_pay||0)), BLACK, 7, false, 'right');
+      cell(C.E, y, CW.E, ROW_H, null, '0.00', BLACK, 7, false, 'right');
+      cell(C.F, y, CW.F, ROW_H, null, 'EI', BLACK, 7, false);
+      cell(C.G, y, CW.G, ROW_H, null, fmt(ei), BLACK, 7, false, 'right');
+      cell(C.H, y, CW.H, ROW_H, null, fmt(ytdEi), BLACK, 7, false, 'right');
+      cell(C.I, y, CW.I, ROW_H, null, 'EI', BLACK, 7, false);
+      cell(C.J, y, CW.J, ROW_H, null, fmt(erEi), BLACK, 7, false, 'right');
+      cell(C.K, y, CW.K+18, ROW_H, null, fmt(ytdErEi), BLACK, 7, false, 'right');
+
+      // ── ROW 8: VAC.PAY ──
+      y += ROW_H;
+      cell(C.A, y, CW.A, ROW_H, null, 'VAC.PAY', BLACK, 7, false);
+      cell(C.B, y, CW.B, ROW_H, null, '0.0', BLACK, 7, false, 'right');
+      cell(C.C, y, CW.C, ROW_H, null, '4%', BLACK, 7, false, 'right');
+      cell(C.D, y, CW.D, ROW_H, null, fmt(vacPay), BLACK, 7, false, 'right');
+      cell(C.E, y, CW.E, ROW_H, null, fmt(ytdVac), BLACK, 7, false, 'right');
+      cell(C.F, y, CW.F, ROW_H, null, '', null, 7, false);
+      cell(C.G, y, CW.G, ROW_H, null, '', null, 7, false);
+      cell(C.H, y, CW.H, ROW_H, null, '', null, 7, false);
+      cell(C.I, y, CW.I, ROW_H, null, '', null, 7, false);
+      cell(C.J, y, CW.J, ROW_H, null, '', null, 7, false);
+      cell(C.K, y, CW.K+18, ROW_H, null, '', null, 7, false);
+
+      // ── Empty rows (9-19 in screenshot) ──
+      for (let i = 0; i < 8; i++) {
+        y += ROW_H;
+        cell(C.A, y, CW.A+CW.B+CW.C+CW.D+CW.E, ROW_H, null, '', null, 7, false);
+        cell(C.F, y, CW.F+CW.G+CW.H+CW.I+CW.J+CW.K+18, ROW_H, null, '', null, 7, false);
+      }
+
+      // ── SUMMARY SECTION ──
+      y += ROW_H * 2;
+
+      // Summary header row
+      const S = { A: LEFT, B: LEFT+22, C: LEFT+44, D: LEFT+66, E: LEFT+88 };
+      const SW = { A:22, B:22, C:22, D:22, E:100 };
+
+      cell(S.A, y, SW.A, ROW_H*2, DARK_GRAY, 'SUMMARY', WHITE, 8, true, 'center');
+      cell(S.B, y, SW.B, ROW_H, DARK_GRAY, 'GROSS', WHITE, 7, true, 'center');
+      cell(S.B, y+ROW_H, SW.B, ROW_H, DARK_GRAY, 'PAY', WHITE, 7, true, 'center');
+      cell(S.C, y, SW.C, ROW_H*2, DARK_GRAY, 'DEDUCTIONS', WHITE, 7, true, 'center');
+      cell(S.D, y, SW.D, ROW_H*2, [100,149,237], 'NET PAY', WHITE, 8, true, 'center');
+      cell(S.E, y, SW.E, ROW_H*2, DARK_GRAY, 'NET PAY ALLOCATION', WHITE, 8, true, 'center');
+
+      // CURRENT row
+      y += ROW_H * 2;
+      cell(S.A, y, SW.A, ROW_H*2, LIGHT_GRAY, 'CURRENT', BLACK, 8, true, 'center');
+      cell(S.B, y, SW.B, ROW_H*2, null, fmt(gross), BLACK, 8, false, 'right');
+      cell(S.C, y, SW.C, ROW_H*2, null, fmt(deductions), BLACK, 8, false, 'right');
+      cell(S.D, y, SW.D, ROW_H*2, null, fmt(net), BLACK, 9, true, 'right');
+      cell(S.E, y, SW.E, ROW_H*2, null, '', null, 8, false);
+
+      // YEAR TO DATE row
+      y += ROW_H * 2;
+      cell(S.A, y, SW.A, ROW_H*2, LIGHT_GRAY, 'YEAR TO DATE', BLACK, 7, true, 'center');
+      cell(S.B, y, SW.B, ROW_H*2, null, fmt(ytdGross), BLACK, 8, false, 'right');
+      cell(S.C, y, SW.C, ROW_H*2, null, fmt(ytdDeductions), BLACK, 8, false, 'right');
+      cell(S.D, y, SW.D, ROW_H*2, null, fmt(ytdNet), BLACK, 9, true, 'right');
+
+      // Net pay allocation detail
+      pdf.setFontSize(8); pdf.setFont('helvetica','normal'); pdf.setTextColor(...BLACK);
+      pdf.text('$', S.E + 2, y + ROW_H);
+      pdf.setFontSize(10); pdf.setFont('helvetica','bold');
+      pdf.text(fmt(net), S.E + 8, y + ROW_H);
+      pdf.setFontSize(7); pdf.setFont('helvetica','normal');
+      pdf.text('Manual Check was issued - Check Number XXXX', S.E + 30, y + ROW_H);
+
+      // ── FOOTER ──
+      y += ROW_H * 3;
+      pdf.setFillColor(...LIGHT_GRAY);
+      pdf.rect(LEFT, y, 262, ROW_H, 'F');
+      pdf.setDrawColor(...LIGHT_GRAY);
+      pdf.rect(LEFT, y, 262, ROW_H, 'S');
+      pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(...BLACK);
+      pdf.text('Employer: ' + (company.bn||'') + ' ' + (company.name||'') + ' - ' + (company.address||''), LEFT + 2, y + ROW_H*0.65);
+
+      pdf.save('paystub-'+(selectedEmp.name||'emp').replace(/ /g,'-')+'-'+(selectedRun.pay_date||'')+'.pdf');
+    } catch(err) { console.error('PDF error:',err); alert('PDF failed: '+err.message); }
+  };
+    if (!selectedEmp || !selectedRun) return;
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const W = 297; const H = 210;
       const rText = (text, x, y) => { const w = pdf.getStringUnitWidth(String(text)) * pdf.getFontSize() / pdf.internal.scaleFactor; pdf.text(String(text), x - w, y); };
       // Header
       pdf.setFillColor(31,41,55); pdf.rect(0,0,W,18,'F');
