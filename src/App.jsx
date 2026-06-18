@@ -1632,6 +1632,9 @@ function RunPayrollPage({ company, setPage }) {
           };
         });
         setHours(initHours);
+        const initSelected = {};
+        data.forEach(e => { initSelected[e.id] = true; });
+        setSelectedEmps(initSelected);
       }
     };
     fetchEmps();
@@ -1641,12 +1644,13 @@ function RunPayrollPage({ company, setPage }) {
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState(false);
-  const [overwriteMode, setOverwriteMode] = useState(false); 
+  const [overwriteMode, setOverwriteMode] = useState(false);
+  const [selectedEmps, setSelectedEmps] = useState({});
   const [period] = useState("Jun 1–15, 2025");
 
   const filteredEmps = emps.filter(e => (e.payroll_schedule || "Bi-weekly") === selectedFreq);
 
-  const rows = filteredEmps.map(e => {
+  const rows = filteredEmps.filter(e => selectedEmps[e.id] !== false).map(e => {
     const defaultReg = e.type === "Salary" ? "80" : "0";
     const defaultVac = (e.vac_rate || "4%").replace("%","");
     const h = hours[e.id] || { reg: defaultReg, ot:"0", stat:"0", statMode:"amount", bonus:"0", vacRate: defaultVac + "%" };
@@ -1678,7 +1682,7 @@ function RunPayrollPage({ company, setPage }) {
         </div>
       )}
       <Card>
-        <div className="p-4 border-b border-gray-50 flex items-center gap-3">
+        <div className="p-4 border-b border-gray-50 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-700"><Calendar size={14} className="text-gray-400" />Frequency:</div>
           <select
             className="text-sm border border-gray-200 rounded-lg px-2 py-1 text-blue-600 font-medium focus:outline-none focus:ring-2 focus:ring-blue-300"
@@ -1706,11 +1710,45 @@ function RunPayrollPage({ company, setPage }) {
           {selectedPeriod && (
             <span className="text-xs text-gray-500">Pay Date: <span className="text-blue-600 font-medium">{getPeriodList(selectedFreq)[+selectedPeriod-1]?.payDate}</span></span>
           )}
+          {selectedPeriod && (
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={() => setSelectedEmps(p => Object.fromEntries(Object.keys(p).map(k => [k, true])))} className="px-2 py-1 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600">Select All</button>
+              <button onClick={() => setSelectedEmps(p => Object.fromEntries(Object.keys(p).map(k => [k, false])))} className="px-2 py-1 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600">Select None</button>
+              <button onClick={async () => {
+                if (!window.confirm("Clear all payroll data for this period? This will reverse YTD values.")) return;
+                const periodLabel = (() => { const pl = getPeriodList(selectedFreq); const p = pl[+selectedPeriod-1]; return p ? `Period ${p.period}: ${p.start} – ${p.end}` : ''; })();
+                const { data: existingRun } = await supabase.from('payroll_runs').select('*').eq('company_id', company.id).eq('period', periodLabel).maybeSingle();
+                if (existingRun?.details) {
+                  for (const oldDetail of existingRun.details) {
+                    const { data: freshEmp } = await supabase.from('employees').select('ytd_gross,ytd_cpp,ytd_ei,ytd_fed_tax,ytd_prov_tax,ytd_vac,ytd_er_cpp,ytd_er_ei,ytd_base_earnings').eq('id', oldDetail.employee_id).single();
+                    if (freshEmp) {
+                      await supabase.from('employees').update({
+                        ytd_gross:         +Math.max((freshEmp.ytd_gross||0)-(oldDetail.gross||0),0).toFixed(2),
+                        ytd_cpp:           +Math.max((freshEmp.ytd_cpp||0)-(oldDetail.cpp||0),0).toFixed(2),
+                        ytd_ei:            +Math.max((freshEmp.ytd_ei||0)-(oldDetail.ei||0),0).toFixed(2),
+                        ytd_fed_tax:       +Math.max((freshEmp.ytd_fed_tax||0)-(oldDetail.fed_tax||0),0).toFixed(2),
+                        ytd_prov_tax:      +Math.max((freshEmp.ytd_prov_tax||0)-(oldDetail.prov_tax||0),0).toFixed(2),
+                        ytd_vac:           +Math.max((freshEmp.ytd_vac||0)-(oldDetail.vac_pay||0),0).toFixed(2),
+                        ytd_er_cpp:        +Math.max((freshEmp.ytd_er_cpp||0)-(oldDetail.er_cpp||0),0).toFixed(2),
+                        ytd_er_ei:         +Math.max((freshEmp.ytd_er_ei||0)-(oldDetail.er_ei||0),0).toFixed(2),
+                        ytd_base_earnings: +Math.max((freshEmp.ytd_base_earnings||0)-(oldDetail.base_earnings||0),0).toFixed(2),
+                      }).eq('id', oldDetail.employee_id);
+                    }
+                  }
+                  await supabase.from('payroll_runs').delete().eq('company_id', company.id).eq('period', periodLabel);
+                  setProcessed(false);
+                  alert("Period cleared. You can now re-enter hours and process fresh.");
+                } else {
+                  alert("No existing payroll found for this period.");
+                }
+              }} className="px-2 py-1 text-xs border border-red-200 rounded-lg hover:bg-red-50 text-red-600">🗑 Clear Period</button>
+            </div>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-gray-50">
-              {["Employee","Reg Hrs","OT Hrs (1.5×)","Stat Pay ($)","Bonus","Vac %","Base Pay","OT Pay","Vac Pay","Gross","CPP","EI","Tax","Net Pay"].map(h=>(
+              {["","Employee","Reg Hrs","OT Hrs (1.5×)","Stat Pay ($)","Bonus","Vac %","Base Pay","OT Pay","Vac Pay","Gross","CPP","EI","Tax","Net Pay"].map(h=>(
                 <th key={h} className="text-left px-3 py-3 whitespace-nowrap">{h}</th>
               ))}
             </tr></thead>
@@ -1719,7 +1757,10 @@ function RunPayrollPage({ company, setPage }) {
                 <tr><td colSpan={13} className="text-center py-6 text-yellow-700 bg-yellow-50 text-sm font-medium">⚠️ Please select a pay period above to enter hours and process payroll.</td></tr>
               )}
               {selectedPeriod && rows.map(e => (
-                <tr key={e.id} className="hover:bg-gray-50">
+                <tr key={e.id} className={`hover:bg-gray-50 ${selectedEmps[e.id]===false?'opacity-40':''}`}>
+                  <td className="px-3 py-3">
+                    <input type="checkbox" checked={selectedEmps[e.id] !== false} onChange={ev => setSelectedEmps(p => ({...p, [e.id]: ev.target.checked}))} className="w-4 h-4 accent-blue-600 cursor-pointer" />
+                  </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 bg-blue-50 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">{e.name.split(" ").map(n=>n[0]).join("")}</div>
@@ -1791,7 +1832,7 @@ function RunPayrollPage({ company, setPage }) {
               ))}
             </tbody>
             <tfoot><tr className="bg-gray-50 font-semibold text-sm">
-              <td className="px-3 py-3 text-gray-700" colSpan={6}>Totals</td>
+              <td className="px-3 py-3 text-gray-700" colSpan={7}>Totals</td>
               <td className="px-3 py-3 text-gray-700">${rows.reduce((a,r)=>a+r.baseEarnings,0).toFixed(2)}</td>
               <td className="px-3 py-3 text-indigo-600">${rows.reduce((a,r)=>a+r.otPay,0).toFixed(2)}</td>
               <td className="px-3 py-3 text-purple-600">${rows.reduce((a,r)=>a+r.vacPay,0).toFixed(2)}</td>
