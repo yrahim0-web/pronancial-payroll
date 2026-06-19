@@ -2256,8 +2256,8 @@ function PaystubsPage({ company }) {
       cell(C.H, y, CW.H+CW.I, ROW_H, null, 'Period Start', BLACK, 7, false);
       cell(C.J, y, CW.J, ROW_H, null, periodStart, BLACK, 7, false);
       cell(C.K, y, CW.K, ROW_H, null, 'Pay Day', BLACK, 7, false);
-      // pay day value — extend right
-      cell(C.K+CW.K, y, 30, ROW_H, null, payDay, BLACK, 7, false);
+      // pay day value — width matched to total table width so this row's right edge lines up
+      cell(C.K+CW.K, y, 18, ROW_H, null, payDay, BLACK, 7, false);
 
       // ── ROW 2: SIN + Period End ──
       y += ROW_H;
@@ -2266,11 +2266,14 @@ function PaystubsPage({ company }) {
       cell(C.F, y, CW.F+CW.G+CW.H, ROW_H, null, '', null, 7, false);
       cell(C.I, y, CW.I, ROW_H, null, 'Period End', BLACK, 7, false);
       cell(C.J, y, CW.J, ROW_H, null, periodEnd, BLACK, 7, false);
+      // filler cell so this row reaches the same right edge as every other row
+      cell(C.K, y, CW.K+18, ROW_H, null, '', null, 7, false);
 
       // ── ROW 3: Section headers ──
       y += ROW_H;
       cell(C.A, y, CW.A+CW.B+CW.C+CW.D+CW.E, ROW_H, LIGHT_GRAY, 'Statement of Earnings', BLACK, 8, true, 'center');
-      cell(C.F, y, CW.F+CW.G+CW.H+CW.I+CW.J+CW.K+18, ROW_H, LIGHT_GRAY, 'Employee Deductions and Employer Contributions', BLACK, 8, true, 'center');
+      cell(C.F, y, CW.F+CW.G+CW.H, ROW_H, LIGHT_GRAY, 'Employee Deductions', BLACK, 8, true, 'center');
+      cell(C.I, y, CW.I+CW.J+CW.K+18, ROW_H, LIGHT_GRAY, 'Employer Contributions', BLACK, 8, true, 'center');
 
       // ── ROW 4: Column headers ──
       y += ROW_H;
