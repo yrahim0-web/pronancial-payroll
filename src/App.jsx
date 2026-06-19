@@ -276,31 +276,34 @@ function calcPayroll(
   const grossPeriod           = +(employmentEarnings + vacPay).toFixed(2);
 
   // ── Step 2: CPP (T4127 Section A) ───────────────────────────────────────────
-  // CPP on gross including vacation pay (CRA includes vac pay in pensionable earnings)
-  // Cap is based on REMAINING ROOM vs YTD already withheld, not a flat annualMax/PP.
+  // Actual deduction this period — capped by REMAINING ROOM vs YTD already withheld.
   const periodExemption   = CPP_EXEMPTION / PP; // keep full precision, no rounding
   const periodPensionable = Math.max(grossPeriod - periodExemption, 0);
   const cppRoomLeft       = Math.max(CPP_MAX_CONTRIB - ytdCppSoFar, 0);
   const periodCPP         = +Math.min(periodPensionable * CPP_RATE, cppRoomLeft).toFixed(2);
-  const annualCPP         = ytdCppSoFar + periodCPP;
+  // Annualized ESTIMATE for the K2 tax credit (T4127 Method 1) — based on this
+  // period's rate continuing all year, capped at the annual max. NOT the actual YTD total.
+  const annualCPP         = Math.min(periodPensionable * CPP_RATE * PP, CPP_MAX_CONTRIB);
 
   // CPP2: 4% on earnings between YMPE ($74,600) and YAMPE ($85,000)
   const annualPensionableForCPP2 = grossPeriod * PP;
   let periodCPP2 = 0;
+  let annualCPP2 = 0;
   if (annualPensionableForCPP2 > CPP2_THRESHOLD) {
     const cpp2Pensionable = Math.min(annualPensionableForCPP2, 85000) - CPP2_THRESHOLD;
     const cpp2RoomLeft    = Math.max(CPP2_MAX - ytdCpp2SoFar, 0);
     periodCPP2 = +Math.min((cpp2Pensionable / PP) * CPP2_RATE, cpp2RoomLeft).toFixed(2);
+    annualCPP2 = Math.min(cpp2Pensionable * CPP2_RATE, CPP2_MAX);
   }
-  const annualCPP2 = ytdCpp2SoFar + periodCPP2;
 
   const totalCPP = +periodCPP.toFixed(2);
 
   // ── Step 3: EI (T4127 Section B) ────────────────────────────────────────────
-  // Cap against remaining room vs YTD already withheld.
+  // Annualized ESTIMATE for the K3 tax credit, capped at the true annual max.
+  const annualEI   = Math.min(grossPeriod * PP * EI_RATE, EI_MAX_CONTRIB);
+  // Actual deduction this period — capped by remaining room vs YTD already withheld.
   const eiRoomLeft = Math.max(EI_MAX_CONTRIB - ytdEiSoFar, 0);
   const periodEI   = +Math.min(grossPeriod * EI_RATE, eiRoomLeft).toFixed(2);
-  const annualEI   = ytdEiSoFar + periodEI;
 
   // ── Step 4: Federal Tax (T4127 Section C — Method 1) ────────────────────────
   // Annualize
