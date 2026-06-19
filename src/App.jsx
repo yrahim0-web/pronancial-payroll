@@ -628,10 +628,10 @@ function Dashboard({ company, companies, setPage, setSelectedCompany, theme = 'l
     const loadCraUpdates = async () => {
       setCraLoading(true);
       const { data } = await supabase
-        .from('cra_updates')
+        .from('cra_news')
         .select('*')
-        .order('published_date', { ascending: false })
-        .limit(8);
+        .order('published_at', { ascending: false })
+        .limit(60);
       if (data) setCraUpdates(data);
       setCraLoading(false);
     };
@@ -999,6 +999,42 @@ function Dashboard({ company, companies, setPage, setSelectedCompany, theme = 'l
                 {c.id===company.id&&<span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full ${isDark?'bg-blue-900/40 text-blue-400':'bg-blue-100 text-blue-700'}`}>Active</span>}
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* ── Row 4: CRA Updates ── */}
+        <div className={`rounded-xl border p-4 ${s.surface}`}>
+          <div className="text-sm font-semibold mb-1">CRA updates</div>
+          <div className={`text-xs ${s.muted} mb-3`}>Latest payroll, corporate & personal tax changes</div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {[
+              { key:'payroll', label:'Payroll', color:'#3b82f6' },
+              { key:'corporate', label:'Corporate Tax', color:'#f59e0b' },
+              { key:'personal', label:'Personal Tax', color:'#10b981' },
+            ].map(sec => {
+              const items = craUpdates.filter(n => n.category === sec.key).slice(0, 5);
+              return (
+                <div key={sec.key}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{background:sec.color}}/>
+                    <span className="text-xs font-semibold">{sec.label}</span>
+                  </div>
+                  {items.length === 0 ? (
+                    <p className={`text-xs ${s.muted}`}>{craLoading ? "Loading…" : "No recent updates"}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {items.map(item => (
+                        <a key={item.id} href={item.link} target="_blank" rel="noopener noreferrer"
+                          className={`block p-2 rounded-lg border ${s.border} hover:border-blue-400 transition-colors`}>
+                          <p className="text-xs font-medium leading-snug">{item.title}</p>
+                          <p className={`text-xs mt-0.5 ${s.muted}`}>{item.published_at ? new Date(item.published_at).toLocaleDateString() : ''} · {item.source}</p>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
