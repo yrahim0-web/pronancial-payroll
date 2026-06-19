@@ -74,10 +74,11 @@ const CPP2_THRESHOLD  = 74600.00; // YMPE 2026
 
 // EI 2026
 const EI_RATE         = 0.0163;
-const EI_MAX_CONTRIB  = 1123.07;  // employee max annual 2026
+const EI_MAX_CONTRIB  = 1123.07;  // employee max annual 2026 (MIE $68,900 × 1.63%)
+const EI_MAX_INSURABLE = 68900;   // 2026 Maximum Insurable Earnings
 
 // Pay periods per year
-const PAY_PERIODS = { "Weekly": 52, "Bi-weekly": 26, "Semi-monthly": 24, "Monthly": 12 };
+const PAY_PERIODS = { "Weekly": 52, "Bi-weekly": 27, "Semi-monthly": 24, "Monthly": 12 };
 
 // Federal 2026 tax brackets (T4032-ON Jan 2026)
 const FED_BRACKETS = [
@@ -287,9 +288,11 @@ function calcPayroll(
   const totalCPP = +periodCPP.toFixed(2);
 
   // ── Step 3: EI (T4127 Section B) ────────────────────────────────────────────
-  // EI on gross including vacation pay (CRA includes vac pay in insurable earnings)
+  // EI: flat rate × gross each period, capped at annual max ÷ PP (T4127 §B)
+  // CRA PDOC applies rate directly to period insurable earnings, not annualized.
   const annualEI  = Math.min(grossPeriod * PP * EI_RATE, EI_MAX_CONTRIB);
-  const periodEI  = +(annualEI / PP).toFixed(2);
+  const periodInsurable = Math.min(grossPeriod, EI_MAX_INSURABLE / PP);
+  const periodEI  = +Math.min(periodInsurable * EI_RATE, EI_MAX_CONTRIB / PP).toFixed(2);
 
   // ── Step 4: Federal Tax (T4127 Section C — Method 1) ────────────────────────
   // Annualize
