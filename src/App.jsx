@@ -1587,6 +1587,14 @@ const getPeriodList = (schedule) => {
   return BIWEEKLY_PERIODS;
 };
 
+// A period_seq is a stable sortable integer: freq-weight*1000 + period number.
+// This lets us order runs chronologically regardless of created_at / insert order,
+// and regardless of which frequency table the period came from.
+const FREQ_WEIGHT = { "Weekly": 1, "Bi-weekly": 2, "Semi-monthly": 3, "Monthly": 4 };
+function computePeriodSeq(freq, periodNumber) {
+  return (FREQ_WEIGHT[freq] || 2) * 100000 + (+periodNumber || 0);
+}
+
 // ─── Run Payroll ──────────────────────────────────────────────────────────────
 const BIWEEKLY_PERIODS = [
   { period: 1,  start: "Dec 29, 2025", end: "Jan 11, 2026", payDate: "Jan 12, 2026" },
@@ -1617,6 +1625,90 @@ const BIWEEKLY_PERIODS = [
   { period: 26, start: "Dec 14, 2026", end: "Dec 27, 2026",  payDate: "Dec 28, 2026" },
   { period: 27, start: "Dec 28, 2026", end: "Jan 10, 2027",  payDate: "Jan 11, 2027" },
 ];
+
+// ─── YTD Cascade Recalculation ────────────────────────────────────────────────
+// Whenever a run is inserted, edited, or deleted, every LATER run (by period_seq)
+// for the affected employees has stale YTD baked into its `details`. This walks
+// forward through later runs in chronological order and rewrites their YTD fields
+// by chaining off each run's immediate predecessor — the same ledger logic used
+// when processing a new run.
+async function cascadeRecalcYTD(companyId, fromPeriodSeqExclusive, employeeIds) {
+  const { data: laterRuns } = await supabase
+    .from('payroll_runs')
+    .select('*')
+    .eq('company_id', companyId)
+    .gt('period_seq', fromPeriodSeqExclusive)
+    .order('period_seq', { ascending: true });
+
+  if (!laterRuns || laterRuns.length === 0) return;
+
+  // Pull employees once for opening balances (only relevant if a run somehow has
+  // no predecessor at all, which cascade should rarely hit, but keeps it correct).
+  const { data: emps } = await supabase
+    .from('employees')
+    .select('*')
+    .in('id', employeeIds);
+  const empById = {};
+  (emps || []).forEach(e => { empById[e.id] = e; });
+
+  // Running "last known YTD per employee" as we walk forward.
+  // Seed it from the run immediately before fromPeriodSeqExclusive's affected employees.
+  const lastYtd = {};
+  for (const empId of employeeIds) {
+    const { data: priorRun } = await supabase
+      .from('payroll_runs')
+      .select('period_seq, details')
+      .eq('company_id', companyId)
+      .lte('period_seq', fromPeriodSeqExclusive)
+      .order('period_seq', { ascending: false })
+      .limit(20); // small window is enough; we just need the nearest match
+    let found = null;
+    for (const run of (priorRun || [])) {
+      const match = (run.details || []).find(d => d.employee_id === empId);
+      if (match) { found = match; break; }
+    }
+    lastYtd[empId] = found; // may be null -> falls back to opening balance below
+  }
+
+  for (const run of laterRuns) {
+    let changed = false;
+    const newDetails = (run.details || []).map(d => {
+      if (!employeeIds.includes(d.employee_id)) return d;
+      const emp = empById[d.employee_id];
+      const prev = lastYtd[d.employee_id];
+      const open = emp ? {
+        gross: +(emp.opening_ytd_gross||0), cpp: +(emp.opening_ytd_cpp||0), ei: +(emp.opening_ytd_ei||0),
+        fed: +(emp.opening_ytd_fed_tax||0), prov: +(emp.opening_ytd_prov_tax||0), vac: +(emp.opening_ytd_vac||0),
+        baseEarn: +(emp.opening_ytd_base_earnings||0), erCpp: +(emp.opening_ytd_er_cpp||0), erEi: +(emp.opening_ytd_er_ei||0),
+      } : { gross:0,cpp:0,ei:0,fed:0,prov:0,vac:0,baseEarn:0,erCpp:0,erEi:0 };
+      const base = prev ? {
+        gross: +(prev.ytd_gross||0), cpp: +(prev.ytd_cpp||0), ei: +(prev.ytd_ei||0),
+        fed: +(prev.ytd_fed_tax||0), prov: +(prev.ytd_prov_tax||0), vac: +(prev.ytd_vac||0),
+        baseEarn: +(prev.ytd_base_earnings||0), erCpp: +(prev.ytd_er_cpp||0), erEi: +(prev.ytd_er_ei||0),
+      } : open;
+
+      const updated = {
+        ...d,
+        ytd_gross:    +(base.gross + (+d.gross||0)).toFixed(2),
+        ytd_cpp:      +(base.cpp   + (+d.cpp||0)).toFixed(2),
+        ytd_ei:       +(base.ei    + (+d.ei||0)).toFixed(2),
+        ytd_fed_tax:  +(base.fed   + (+d.fed_tax||0)).toFixed(2),
+        ytd_prov_tax: +(base.prov  + (+d.prov_tax||0)).toFixed(2),
+        ytd_vac:           +(base.vac     + (+d.vac_pay||0)).toFixed(2),
+        ytd_base_earnings: +(base.baseEarn + (+d.base_earnings||0)).toFixed(2),
+        ytd_er_cpp:        +(base.erCpp   + (+d.cpp||0)).toFixed(2),
+        ytd_er_ei:         +(base.erEi    + ((+d.ei||0) * 1.4)).toFixed(2),
+      };
+      lastYtd[d.employee_id] = updated; // chain forward to next run in the loop
+      changed = true;
+      return updated;
+    });
+
+    if (changed) {
+      await supabase.from('payroll_runs').update({ details: newDetails }).eq('id', run.id);
+    }
+  }
+}
 
 function RunPayrollPage({ company, setPage }) {
   const [emps, setEmps] = useState([]);
@@ -1726,9 +1818,14 @@ function RunPayrollPage({ company, setPage }) {
               <button onClick={async () => {
                 if (!window.confirm("Clear all payroll data for this period?")) return;
                 const periodLabel = (() => { const pl = getPeriodList(selectedFreq); const p = pl[+selectedPeriod-1]; return p ? `Period ${p.period}: ${p.start} – ${p.end}` : ''; })();
-                const { data: existingRun } = await supabase.from('payroll_runs').select('id').eq('company_id', company.id).eq('period', periodLabel).maybeSingle();
+                const { data: existingRun } = await supabase.from('payroll_runs').select('id, period_seq, details').eq('company_id', company.id).eq('period', periodLabel).maybeSingle();
                 if (existingRun) {
+                  const affectedIds = (existingRun.details || []).map(d => d.employee_id);
+                  const seq = existingRun.period_seq ?? computePeriodSeq(selectedFreq, +selectedPeriod);
                   await supabase.from('payroll_runs').delete().eq('id', existingRun.id);
+                  if (affectedIds.length > 0) {
+                    await cascadeRecalcYTD(company.id, seq, affectedIds);
+                  }
                   setProcessed(false);
                   alert("Period cleared. You can now re-enter hours and process fresh.");
                 } else {
@@ -1889,35 +1986,52 @@ function RunPayrollPage({ company, setPage }) {
     setOverwriteMode(false);
   }
   const isRerun = overwriteMode;
+  const currentPeriodSeq = computePeriodSeq(selectedFreq, +selectedPeriod);
   const { data } = await supabase
     .from('payroll_runs')
     .insert([{
       company_id: company.id,
       period: (() => { const pl = getPeriodList(selectedFreq); const p = pl[+selectedPeriod-1]; return p ? `Period ${p.period}: ${p.start} – ${p.end}` : ''; })(),
       pay_date: getPeriodList(selectedFreq)[+selectedPeriod-1]?.payDate || new Date().toISOString().split('T')[0],
+      period_seq: currentPeriodSeq,
       employees: rows.length,
       gross: totals.gross,
       deductions: +(totals.cpp + totals.ei + totals.tax).toFixed(2),
       net: totals.net,
       status: 'completed',
       details: await Promise.all(rows.map(async r => {
-        const { data: priorRuns } = await supabase
+        // Ledger model: find the single most recent PRIOR run (lower period_seq)
+        // that contains this employee, and chain this run's YTD off of *its* stored YTD.
+        // This replaces re-summing all of history every time.
+        const { data: allRuns } = await supabase
           .from('payroll_runs')
-          .select('details')
-          .eq('company_id', company.id);
-        let priorGross=0, priorCpp=0, priorEi=0, priorFed=0, priorProv=0, priorVac=0, priorBase=0, priorErCpp=0, priorErEi=0;
-        (priorRuns || []).forEach(run => {
-          (run.details || []).forEach(d => {
-            if (d.employee_id === r.id) {
-              priorGross += (+d.gross||0); priorCpp += (+d.cpp||0); priorEi += (+d.ei||0);
-              priorFed += (+d.fed_tax||0); priorProv += (+d.prov_tax||0); priorVac += (+d.vac_pay||0);
-              priorBase += (+d.base_earnings||0); priorErCpp += (+d.er_cpp||0); priorErEi += (+d.er_ei||0);
-            }
-          });
-        });
+          .select('period_seq, details')
+          .eq('company_id', company.id)
+          .lt('period_seq', currentPeriodSeq)
+          .order('period_seq', { ascending: false });
+
+        let prevYtd = null;
+        for (const run of (allRuns || [])) {
+          const match = (run.details || []).find(d => d.employee_id === r.id);
+          if (match) { prevYtd = match; break; } // most recent prior run for this employee
+        }
+
+        // Opening balances only apply if there is NO prior run yet for this employee
+        // (i.e. this is the first run processed since they were added / their opening
+        // balance was set). Once a real run exists, the chain takes over permanently.
         const openGross = +(r.opening_ytd_gross||0), openCpp = +(r.opening_ytd_cpp||0), openEi = +(r.opening_ytd_ei||0);
         const openFed = +(r.opening_ytd_fed_tax||0), openProv = +(r.opening_ytd_prov_tax||0), openVac = +(r.opening_ytd_vac||0);
         const openBase = +(r.opening_ytd_base_earnings||0), openErCpp = +(r.opening_ytd_er_cpp||0), openErEi = +(r.opening_ytd_er_ei||0);
+
+        const base = prevYtd ? {
+          gross: +(prevYtd.ytd_gross||0), cpp: +(prevYtd.ytd_cpp||0), ei: +(prevYtd.ytd_ei||0),
+          fed: +(prevYtd.ytd_fed_tax||0), prov: +(prevYtd.ytd_prov_tax||0), vac: +(prevYtd.ytd_vac||0),
+          baseEarn: +(prevYtd.ytd_base_earnings||0), erCpp: +(prevYtd.ytd_er_cpp||0), erEi: +(prevYtd.ytd_er_ei||0),
+        } : {
+          gross: openGross, cpp: openCpp, ei: openEi, fed: openFed, prov: openProv,
+          vac: openVac, baseEarn: openBase, erCpp: openErCpp, erEi: openErEi,
+        };
+
         return {
           employee_id: r.id,
           name: r.name,
@@ -1927,6 +2041,7 @@ function RunPayrollPage({ company, setPage }) {
           reg_hrs: r.reg || "0",
           ot_hrs: r.ot || "0",
           stat_hrs: r.stat || "0",
+          period_seq: currentPeriodSeq,
           gross: r.gross,
           base_earnings: r.baseEarnings,
           vac_pay: r.vacPay,
@@ -1938,21 +2053,25 @@ function RunPayrollPage({ company, setPage }) {
           net: r.net,
           er_cpp: +(r.cpp || 0).toFixed(2),
           er_ei: +((r.ei || 0) * 1.4).toFixed(2),
-          ytd_gross:    +(openGross + priorGross + r.gross).toFixed(2),
-          ytd_cpp:      +(openCpp   + priorCpp   + r.cpp).toFixed(2),
-          ytd_ei:       +(openEi    + priorEi    + r.ei).toFixed(2),
-          ytd_fed_tax:  +(openFed   + priorFed   + (r.fedTax || 0)).toFixed(2),
-          ytd_prov_tax: +(openProv  + priorProv  + (r.provTax || 0)).toFixed(2),
-          ytd_vac:           +(openVac  + priorVac  + r.vacPay).toFixed(2),
-          ytd_base_earnings: +(openBase + priorBase + (r.baseEarnings || 0)).toFixed(2),
-          ytd_er_cpp:        +(openErCpp + priorErCpp + (r.cpp || 0)).toFixed(2),
-          ytd_er_ei:         +(openErEi  + priorErEi  + ((r.ei || 0) * 1.4)).toFixed(2),
+          ytd_gross:    +(base.gross + r.gross).toFixed(2),
+          ytd_cpp:      +(base.cpp   + r.cpp).toFixed(2),
+          ytd_ei:       +(base.ei    + r.ei).toFixed(2),
+          ytd_fed_tax:  +(base.fed   + (r.fedTax || 0)).toFixed(2),
+          ytd_prov_tax: +(base.prov  + (r.provTax || 0)).toFixed(2),
+          ytd_vac:           +(base.vac     + r.vacPay).toFixed(2),
+          ytd_base_earnings: +(base.baseEarn + (r.baseEarnings || 0)).toFixed(2),
+          ytd_er_cpp:        +(base.erCpp   + (r.cpp || 0)).toFixed(2),
+          ytd_er_ei:         +(base.erEi    + ((r.ei || 0) * 1.4)).toFixed(2),
         };
       }))
     }])
     .select()
     .single();
   if (data) {
+    // Cascade: this run may have changed YTD for these employees.
+    // Recalculate every later run (higher period_seq) for the affected employees,
+    // in chronological order, so YTD stays consistent going forward.
+    await cascadeRecalcYTD(company.id, currentPeriodSeq, rows.map(r => r.id));
     setProcessed(true);
     if (!isRerun) {
       for (const r of rows) {
@@ -2394,6 +2513,10 @@ function HistoryPage({ company }) {
     if (!deleteRun) return;
     setDeleting(true);
     const toKeep = (deleteRun.details || []).filter(d => !deleteSelected[d.employee_id]);
+    const removedEmployeeIds = (deleteRun.details || [])
+      .filter(d => deleteSelected[d.employee_id])
+      .map(d => d.employee_id);
+    const seq = deleteRun.period_seq ?? -1;
 
     if (toKeep.length === 0) {
       // Delete entire run
@@ -2412,6 +2535,16 @@ function HistoryPage({ company }) {
         deductions: +newDed.toFixed(2),
       }).eq('id', deleteRun.id).select().single();
       if (updated) setHistory(prev => prev.map(r => r.id === updated.id ? updated : r));
+    }
+
+    // Any later run for the removed employees now has a broken YTD chain — recalc forward.
+    if (removedEmployeeIds.length > 0) {
+      await cascadeRecalcYTD(company.id, seq, removedEmployeeIds);
+      // Refresh local state since cascade writes happened outside setHistory above.
+      const { data: refreshed } = await supabase
+        .from('payroll_runs').select('*').eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+      if (refreshed) setHistory(refreshed);
     }
     setDeleting(false);
     setDeleteRun(null);
@@ -2582,6 +2715,36 @@ function ReportsPage({ company }) {
 // ─── Settings ────────────────────────────────────────────────────────────────
 function SettingsPage({ company, setSelectedCompany }) {
   const [saved, setSaved] = useState(false);
+  const [backfillStatus, setBackfillStatus] = useState("");
+
+  const runBackfillPeriodSeq = async () => {
+    setBackfillStatus("Running...");
+    const FREQ_WEIGHT = { "Weekly": 1, "Bi-weekly": 2, "Semi-monthly": 3, "Monthly": 4 };
+    const { data: companies } = await supabase.from('companies').select('id, payroll_freq');
+    const { data: runs } = await supabase.from('payroll_runs').select('id, company_id, period');
+
+    let updated = 0, skipped = 0;
+    for (const run of runs || []) {
+      if (!run.period) { skipped++; continue; }
+      const match = run.period.match(/Period\s+(\d+)/i);
+      if (!match) { skipped++; continue; }
+      const periodNum = parseInt(match[1], 10);
+
+      const comp = (companies || []).find(c => c.id === run.company_id);
+      const freq = comp?.payroll_freq || "Bi-weekly";
+      const weight = FREQ_WEIGHT[freq] || 2;
+      const periodSeq = weight * 100000 + periodNum;
+
+      const { error } = await supabase
+        .from('payroll_runs')
+        .update({ period_seq: periodSeq })
+        .eq('id', run.id);
+
+      if (error) { console.error("Failed to update run", run.id, error); }
+      else { updated++; }
+    }
+    setBackfillStatus(`Done. Updated: ${updated}, Skipped: ${skipped}`);
+  };
   const [form, setForm] = useState({
     name: company.name || "",
     bn: company.bn || "",
@@ -2673,6 +2836,13 @@ function SettingsPage({ company, setSelectedCompany }) {
           ))}
         </div>
       </Card>
+      <Card className="p-6 border-2 border-amber-300">
+        <h3 className="text-sm font-semibold text-amber-700 mb-2">⚠️ One-Time Maintenance (temporary)</h3>
+        <p className="text-xs text-gray-500 mb-3">Run this once to fix old payroll runs created before the YTD update. Safe to click multiple times.</p>
+        <button onClick={runBackfillPeriodSeq} className="px-4 py-2 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-medium transition-colors">Run Backfill</button>
+        {backfillStatus && <p className="text-xs text-gray-600 mt-2">{backfillStatus}</p>}
+      </Card>
+
       <div className="flex justify-end gap-3">
         <button className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">Discard Changes</button>
         <button onClick={saveSettings} className="px-6 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors">Save Settings</button>
