@@ -284,6 +284,7 @@ function calcPayroll(
 
   // CPP2 disabled to match Excel benchmark — base CPP1 only
   const periodCPP2 = 0;
+  const annualCPP2 = 0;
 
   const totalCPP = +periodCPP.toFixed(2);
 
