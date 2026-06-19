@@ -2914,10 +2914,25 @@ useEffect(() => {
   return () => subscription.unsubscribe();
 }, []);
   useEffect(() => {
-    // Bump the root font size so all Tailwind rem-based text/padding scale up
-    // uniformly on every page (login, dashboard, etc.) — without relying on
-    // browser zoom, which overflows the fixed layout and forces extra scrolling.
-    document.documentElement.style.fontSize = '118%';
+    // Bump root font size for bigger, more readable text everywhere.
+    document.documentElement.style.fontSize = '128%';
+
+    // Tighten the biggest space-consumers (page padding, card padding, table
+    // row padding, grid gaps) so the larger text above has room to grow
+    // without pushing the layout into overflow/extra scrolling. Buttons,
+    // inputs, and badges are left untouched so they stay easy to click.
+    const styleTag = document.createElement('style');
+    styleTag.innerHTML = `
+      .p-6 { padding: 1.1rem !important; }
+      .p-5 { padding: 0.9rem !important; }
+      .px-5 { padding-left: 0.9rem !important; padding-right: 0.9rem !important; }
+      .py-4 { padding-top: 0.55rem !important; padding-bottom: 0.55rem !important; }
+      .py-3 { padding-top: 0.4rem !important; padding-bottom: 0.4rem !important; }
+      .gap-6 { gap: 0.85rem !important; }
+      .gap-4 { gap: 0.6rem !important; }
+      .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.85rem !important; }
+    `;
+    document.head.appendChild(styleTag);
   }, []);
   const [page, setPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
