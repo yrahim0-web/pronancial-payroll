@@ -2913,6 +2913,12 @@ useEffect(() => {
 
   return () => subscription.unsubscribe();
 }, []);
+  useEffect(() => {
+    // Bump the root font size so all Tailwind rem-based text/padding scale up
+    // uniformly on every page (login, dashboard, etc.) — without relying on
+    // browser zoom, which overflows the fixed layout and forces extra scrolling.
+    document.documentElement.style.fontSize = '118%';
+  }, []);
   const [page, setPage] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [theme, setTheme] = useState(() => localStorage.getItem('pron_theme') || 'light');
