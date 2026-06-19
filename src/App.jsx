@@ -2184,6 +2184,10 @@ function PaystubsPage({ company }) {
       const ytdEi    = +(selectedEmp.ytd_ei||0);
       const fedTax   = +(selectedEmp.fed_tax||0);
       const ytdFed   = +(selectedEmp.ytd_fed_tax||0);
+      const provTax  = +(selectedEmp.prov_tax||0);
+      const ytdProv  = +(selectedEmp.ytd_prov_tax||0);
+      const incomeTax    = fedTax + provTax;       // combined Fed + Prov, shown as one line on the stub
+      const ytdIncomeTax = ytdFed + ytdProv;
       const erCpp    = +(selectedEmp.er_cpp||0);
       const ytdErCpp = +(selectedEmp.ytd_er_cpp||0);
       const erEi     = +(selectedEmp.er_ei||0);
@@ -2191,9 +2195,9 @@ function PaystubsPage({ company }) {
       const gross    = +(selectedEmp.gross||0);
       const ytdGross = +(selectedEmp.ytd_gross||0);
       const net      = +(selectedEmp.net||0);
-      const ytdNet   = ytdGross - ytdCpp - ytdEi - ytdFed - (+(selectedEmp.ytd_prov_tax||0));
-      const deductions    = cpp + ei + fedTax;
-      const ytdDeductions = ytdCpp + ytdEi + ytdFed + (+(selectedEmp.ytd_prov_tax||0));
+      const ytdNet   = ytdGross - ytdCpp - ytdEi - ytdIncomeTax;
+      const deductions    = cpp + ei + incomeTax;
+      const ytdDeductions = ytdCpp + ytdEi + ytdIncomeTax;
 
       // ── Helper: draw cell with background ──
       const cell = (x, y, w, h, bg, text, textColor, fontSize, bold, align='left') => {
@@ -2233,9 +2237,9 @@ function PaystubsPage({ company }) {
         F: LEFT+76,    // TYPE (deductions)
         G: LEFT+98,    // CURRENT (emp deductions)
         H: LEFT+116,   // Y.T.D (emp deductions)
-        I: LEFT+132,   // TYPE (employer)
-        J: LEFT+150,   // CURRENT (employer)
-        K: LEFT+168,   // Y.T.D (employer)
+        I: LEFT+134,   // TYPE (employer)  — fixed 2mm overlap with column H
+        J: LEFT+152,   // CURRENT (employer)
+        K: LEFT+170,   // Y.T.D (employer)
       };
       const CW = { // column widths
         A:22, B:12, C:12, D:14, E:16,
@@ -2289,9 +2293,9 @@ function PaystubsPage({ company }) {
       cell(C.C, y, CW.C, ROW_H, null, '$'+fmt(rate), BLACK, 7, false, 'right');
       cell(C.D, y, CW.D, ROW_H, null, fmt(basePay), BLACK, 7, false, 'right');
       cell(C.E, y, CW.E, ROW_H, null, fmt(ytdBase), BLACK, 7, false, 'right');
-      cell(C.F, y, CW.F, ROW_H, null, 'FED.TAX', BLACK, 7, false);
-      cell(C.G, y, CW.G, ROW_H, null, fmt(fedTax), BLACK, 7, false, 'right');
-      cell(C.H, y, CW.H, ROW_H, null, fmt(ytdFed), BLACK, 7, false, 'right');
+      cell(C.F, y, CW.F, ROW_H, null, 'INC.TAX', BLACK, 7, false);
+      cell(C.G, y, CW.G, ROW_H, null, fmt(incomeTax), BLACK, 7, false, 'right');
+      cell(C.H, y, CW.H, ROW_H, null, fmt(ytdIncomeTax), BLACK, 7, false, 'right');
       cell(C.I, y, CW.I, ROW_H, null, '', null, 7, false);
       cell(C.J, y, CW.J, ROW_H, null, '0', BLACK, 7, false, 'right');
       cell(C.K, y, CW.K+18, ROW_H, null, '0', BLACK, 7, false, 'right');
