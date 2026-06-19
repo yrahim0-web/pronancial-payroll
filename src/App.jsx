@@ -601,6 +601,8 @@ function Dashboard({ company, companies, setPage, setSelectedCompany, theme = 'l
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState('both');
   const [activeBar, setActiveBar] = useState('gross');
+  const [craUpdates, setCraUpdates] = useState([]);
+  const [craLoading, setCraLoading] = useState(true);
   const trendRef = useRef(null);
   const donutRef = useRef(null);
   const barRef = useRef(null);
@@ -621,6 +623,20 @@ function Dashboard({ company, companies, setPage, setSelectedCompany, theme = 'l
     grid:'rgba(0,0,0,0.04)', tick:'#94a3b8',
     accent:'#2563eb', green:'#059669', amber:'#d97706', red:'#dc2626', cyan:'#0891b2', purple:'#7c3aed',
   };
+
+  useEffect(() => {
+    const loadCraUpdates = async () => {
+      setCraLoading(true);
+      const { data } = await supabase
+        .from('cra_updates')
+        .select('*')
+        .order('published_date', { ascending: false })
+        .limit(8);
+      if (data) setCraUpdates(data);
+      setCraLoading(false);
+    };
+    loadCraUpdates();
+  }, []);
 
   useEffect(() => {
     const load = async () => {
