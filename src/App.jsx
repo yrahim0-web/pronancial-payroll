@@ -289,11 +289,9 @@ function calcPayroll(
   const totalCPP = +periodCPP.toFixed(2);
 
   // ── Step 3: EI (T4127 Section B) ────────────────────────────────────────────
-  // EI: flat rate × gross each period, capped at annual max ÷ PP (T4127 §B)
-  // CRA PDOC applies rate directly to period insurable earnings, not annualized.
-  const annualEI  = Math.min(grossPeriod * PP * EI_RATE, EI_MAX_CONTRIB);
-  const periodInsurable = Math.min(grossPeriod, EI_MAX_INSURABLE / PP);
-  const periodEI  = +Math.min(periodInsurable * EI_RATE, EI_MAX_CONTRIB / PP).toFixed(2);
+  // CRA: simply rate × gross per period. Annual max tracked via YTD.
+  const annualEI = Math.min(grossPeriod * PP * EI_RATE, EI_MAX_CONTRIB);
+  const periodEI = +(grossPeriod * EI_RATE).toFixed(2);
 
   // ── Step 4: Federal Tax (T4127 Section C — Method 1) ────────────────────────
   // Annualize
