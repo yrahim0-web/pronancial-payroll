@@ -294,10 +294,27 @@ function calcPayroll(
 
   const totalCPP = +periodCPP.toFixed(2);
 
+  // ── Step 3: // CPP2: 4% on earnings between YMPE ($74,600) and YAMPE ($85,000) per T4127 Ch.6
+  const YAMPE = 85000;
+  const annualPensionableTotal = grossPeriod * PP;
+  let periodCPP2 = 0;
+  if (annualPensionableTotal > CPP2_THRESHOLD) {
+    const cpp2Annual = Math.min(
+      (Math.min(annualPensionableTotal, YAMPE) - CPP2_THRESHOLD) * CPP2_RATE,
+      CPP2_MAX
+    );
+    periodCPP2 = +(cpp2Annual / PP).toFixed(2);
+  }
+  const annualCPP2 = periodCPP2 * PP;
+
+  // totalCPP = CPP1 + CPP2 (both deducted from employee pay)
+  const totalCPP = +(periodCPP + periodCPP2).toFixed(2);
+
   // ── Step 3: EI (T4127 Section B) ────────────────────────────────────────────
-  // CRA: simply rate × gross per period. Annual max tracked via YTD.
-  const annualEI = Math.min(grossPeriod * PP * EI_RATE, EI_MAX_CONTRIB);
+  // CRA: rate × gross per period
   const periodEI = +(grossPeriod * EI_RATE).toFixed(2);
+  // annualEI for K2/K3/KP tax credit purposes must be capped at annual max
+  const annualEI = Math.min(periodEI * PP, EI_MAX_CONTRIB);
 
   // ── Step 4: Federal Tax (T4127 Section C — Method 1) ────────────────────────
   // Annualize
