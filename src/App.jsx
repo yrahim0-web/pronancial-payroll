@@ -281,13 +281,10 @@ function calcPayroll(
   const periodCPP         = +Math.min(periodPensionable * CPP_RATE, CPP_MAX_CONTRIB / PP).toFixed(2);
   const annualCPP         = periodCPP * PP;
 
-  // CPP2 (on earnings above YMPE 2026 = $74,600)
-  const annualCPP2 = annualPensionable > CPP2_THRESHOLD
-    ? Math.min((annualPensionable - CPP2_THRESHOLD) * CPP2_RATE, CPP2_MAX)
-    : 0;
-  const periodCPP2 = +(annualCPP2 / PP).toFixed(2);
+  // CPP2 disabled to match Excel benchmark — base CPP1 only
+  const periodCPP2 = 0;
 
-  const totalCPP = +(periodCPP + periodCPP2).toFixed(2);
+  const totalCPP = +periodCPP.toFixed(2);
 
   // ── Step 3: EI (T4127 Section B) ────────────────────────────────────────────
   // EI on gross including vacation pay (CRA includes vac pay in insurable earnings)
