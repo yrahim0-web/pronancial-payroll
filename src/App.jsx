@@ -2046,6 +2046,8 @@ function RunPayrollPage({ company, setPage }) {
           base_earnings: r.baseEarnings,
           vac_pay: r.vacPay,
           cpp: r.cpp,
+          cpp1: +(r.cpp1 || 0).toFixed(2),
+          cpp2: +(r.cpp2 || 0).toFixed(2),
           ei: r.ei,
           fed_tax: +(r.fedTax || 0).toFixed(2),
           prov_tax: +(r.provTax || 0).toFixed(2),
@@ -2457,7 +2459,8 @@ function PaystubsPage({ company }) {
                     <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Vacation Pay</td><td className="px-5 py-2.5 text-right text-purple-600">{(+selectedEmp.vac_pay||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right text-gray-500">{(+selectedEmp.ytd_vac||0).toFixed(2)}</td></tr>
                     <tr className="bg-gray-50"><td className="px-5 py-2.5 font-semibold text-gray-800">Gross Earnings</td><td className="px-5 py-2.5 text-right font-semibold text-gray-900">{(+selectedEmp.gross||0).toFixed(2)}</td><td className="px-5 py-2.5 text-right font-semibold text-gray-700">{(+selectedEmp.ytd_gross||0).toFixed(2)}</td></tr>
                     <tr className="bg-red-50"><td className="px-5 py-1.5 text-xs font-semibold text-red-700" colSpan={3}>Employee Deductions</td></tr>
-                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">CPP Contributions</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.cpp||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(+selectedEmp.ytd_cpp||0).toFixed(2)})</td></tr>
+                    <tr><td className="px-5 py-2.5 text-gray-600 pl-8">CPP Contributions</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.cpp1||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>
+                    {(+selectedEmp.cpp2||0) > 0 && <tr><td className="px-5 py-2.5 text-gray-600 pl-8">CPP2 (Enhanced, above YMPE)</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.cpp2||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">—</td></tr>}
                     <tr><td className="px-5 py-2.5 text-gray-600 pl-8">EI Premiums</td><td className="px-5 py-2.5 text-right text-red-500">({(+selectedEmp.ei||0).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({(+selectedEmp.ytd_ei||0).toFixed(2)})</td></tr>
                     <tr><td className="px-5 py-2.5 text-gray-600 pl-8">Income Tax (Federal + Provincial)</td><td className="px-5 py-2.5 text-right text-red-500">({((+selectedEmp.fed_tax||0)+(+selectedEmp.prov_tax||0)).toFixed(2)})</td><td className="px-5 py-2.5 text-right text-gray-500">({((+selectedEmp.ytd_fed_tax||0)+(+selectedEmp.ytd_prov_tax||0)).toFixed(2)})</td></tr>
                     <tr className="bg-blue-50"><td className="px-5 py-3 font-bold text-gray-900">Net Pay</td><td className="px-5 py-3 text-right font-bold text-emerald-700 text-base">${(+selectedEmp.net||0).toFixed(2)}</td><td className="px-5 py-3 text-right font-semibold text-gray-700">${((+selectedEmp.ytd_gross||0)-(+selectedEmp.ytd_cpp||0)-(+selectedEmp.ytd_ei||0)-(+selectedEmp.ytd_fed_tax||0)-(+selectedEmp.ytd_prov_tax||0)).toFixed(2)}</td></tr>
