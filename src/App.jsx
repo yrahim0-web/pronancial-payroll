@@ -1260,19 +1260,19 @@ useEffect(() => {
         vac_rate: (form.vacRate || "4") + "%",
         payroll_schedule: form.paySchedule || "Semi-monthly",
       };
-      // Only protect YTD fields on edit if employee already has YTD data and unlock is not checked
-      const hasExistingYTD = (editEmployee.ytd_gross || 0) > 0;
+      // Opening YTD balances are only editable via the unlock checkbox; they are never auto-updated by payroll runs
+      const hasExistingYTD = (editEmployee.opening_ytd_gross || 0) > 0;
       const shouldUpdateYTD = !hasExistingYTD || form.ytd_unlock === true;
       if (shouldUpdateYTD) {
-        if (form.ytd_gross !== "") updatePayload.ytd_gross = parseFloat(form.ytd_gross) || 0;
-        if (form.ytd_cpp !== "") updatePayload.ytd_cpp = parseFloat(form.ytd_cpp) || 0;
-        if (form.ytd_ei !== "") updatePayload.ytd_ei = parseFloat(form.ytd_ei) || 0;
-        if (form.ytd_fed_tax !== "") updatePayload.ytd_fed_tax = parseFloat(form.ytd_fed_tax) || 0;
-        if (form.ytd_prov_tax !== "") updatePayload.ytd_prov_tax = parseFloat(form.ytd_prov_tax) || 0;
-        if (form.ytd_vac !== "") updatePayload.ytd_vac = parseFloat(form.ytd_vac) || 0;
-        if (form.ytd_er_cpp !== "") updatePayload.ytd_er_cpp = parseFloat(form.ytd_er_cpp) || 0;
-        if (form.ytd_er_ei !== "") updatePayload.ytd_er_ei = parseFloat(form.ytd_er_ei) || 0;
-        if (form.ytd_base_earnings !== "") updatePayload.ytd_base_earnings = parseFloat(form.ytd_base_earnings) || 0;
+        if (form.ytd_gross !== "") updatePayload.opening_ytd_gross = parseFloat(form.ytd_gross) || 0;
+        if (form.ytd_cpp !== "") updatePayload.opening_ytd_cpp = parseFloat(form.ytd_cpp) || 0;
+        if (form.ytd_ei !== "") updatePayload.opening_ytd_ei = parseFloat(form.ytd_ei) || 0;
+        if (form.ytd_fed_tax !== "") updatePayload.opening_ytd_fed_tax = parseFloat(form.ytd_fed_tax) || 0;
+        if (form.ytd_prov_tax !== "") updatePayload.opening_ytd_prov_tax = parseFloat(form.ytd_prov_tax) || 0;
+        if (form.ytd_vac !== "") updatePayload.opening_ytd_vac = parseFloat(form.ytd_vac) || 0;
+        if (form.ytd_er_cpp !== "") updatePayload.opening_ytd_er_cpp = parseFloat(form.ytd_er_cpp) || 0;
+        if (form.ytd_er_ei !== "") updatePayload.opening_ytd_er_ei = parseFloat(form.ytd_er_ei) || 0;
+        if (form.ytd_base_earnings !== "") updatePayload.opening_ytd_base_earnings = parseFloat(form.ytd_base_earnings) || 0;
       }
       const { data } = await supabase
         .from('employees')
@@ -1303,15 +1303,24 @@ useEffect(() => {
           hire_date: form.hireDate || null,
           vac_rate: (form.vacRate || "4") + "%",
           payroll_schedule: form.paySchedule || "Semi-monthly",
-          ytd_gross: parseFloat(form.ytd_gross) || 0,
-          ytd_cpp: parseFloat(form.ytd_cpp) || 0,
-          ytd_ei: parseFloat(form.ytd_ei) || 0,
-          ytd_fed_tax: parseFloat(form.ytd_fed_tax) || 0,
-          ytd_prov_tax: parseFloat(form.ytd_prov_tax) || 0,
-          ytd_vac: parseFloat(form.ytd_vac) || 0,
-          ytd_er_cpp: parseFloat(form.ytd_er_cpp) || 0,
-          ytd_er_ei: parseFloat(form.ytd_er_ei) || 0,
-          ytd_base_earnings: parseFloat(form.ytd_base_earnings) || 0
+          opening_ytd_gross: parseFloat(form.ytd_gross) || 0,
+          opening_ytd_cpp: parseFloat(form.ytd_cpp) || 0,
+          opening_ytd_ei: parseFloat(form.ytd_ei) || 0,
+          opening_ytd_fed_tax: parseFloat(form.ytd_fed_tax) || 0,
+          opening_ytd_prov_tax: parseFloat(form.ytd_prov_tax) || 0,
+          opening_ytd_vac: parseFloat(form.ytd_vac) || 0,
+          opening_ytd_er_cpp: parseFloat(form.ytd_er_cpp) || 0,
+          opening_ytd_er_ei: parseFloat(form.ytd_er_ei) || 0,
+          opening_ytd_base_earnings: parseFloat(form.ytd_base_earnings) || 0,
+          ytd_gross: 0,
+          ytd_cpp: 0,
+          ytd_ei: 0,
+          ytd_fed_tax: 0,
+          ytd_prov_tax: 0,
+          ytd_vac: 0,
+          ytd_er_cpp: 0,
+          ytd_er_ei: 0,
+          ytd_base_earnings: 0
         }])
         .select()
         .single();
@@ -1377,7 +1386,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.ytd_gross||""), ytd_cpp: String(e.ytd_cpp||""), ytd_ei: String(e.ytd_ei||""), ytd_fed_tax: String(e.ytd_fed_tax||""), ytd_prov_tax: String(e.ytd_prov_tax||""), ytd_vac: String(e.ytd_vac||""), ytd_er_cpp: String(e.ytd_er_cpp||""), ytd_er_ei: String(e.ytd_er_ei||""), ytd_base_earnings: String(e.ytd_base_earnings||""), ytd_tax: String(((e.ytd_fed_tax||0)+(e.ytd_prov_tax||0)).toFixed(2)), ytd_unlock: false, ytd_as_of_period: e.ytd_as_of_period||"" }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.opening_ytd_gross||""), ytd_cpp: String(e.opening_ytd_cpp||""), ytd_ei: String(e.opening_ytd_ei||""), ytd_fed_tax: String(e.opening_ytd_fed_tax||""), ytd_prov_tax: String(e.opening_ytd_prov_tax||""), ytd_vac: String(e.opening_ytd_vac||""), ytd_er_cpp: String(e.opening_ytd_er_cpp||""), ytd_er_ei: String(e.opening_ytd_er_ei||""), ytd_base_earnings: String(e.opening_ytd_base_earnings||""), ytd_tax: String(((e.opening_ytd_fed_tax||0)+(e.opening_ytd_prov_tax||0)).toFixed(2)), ytd_unlock: false, ytd_as_of_period: e.ytd_as_of_period||"" }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -1715,27 +1724,11 @@ function RunPayrollPage({ company, setPage }) {
               <button onClick={() => setSelectedEmps(p => Object.fromEntries(Object.keys(p).map(k => [k, true])))} className="px-2 py-1 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600">Select All</button>
               <button onClick={() => setSelectedEmps(p => Object.fromEntries(Object.keys(p).map(k => [k, false])))} className="px-2 py-1 text-xs border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600">Select None</button>
               <button onClick={async () => {
-                if (!window.confirm("Clear all payroll data for this period? This will reverse YTD values.")) return;
+                if (!window.confirm("Clear all payroll data for this period?")) return;
                 const periodLabel = (() => { const pl = getPeriodList(selectedFreq); const p = pl[+selectedPeriod-1]; return p ? `Period ${p.period}: ${p.start} – ${p.end}` : ''; })();
-                const { data: existingRun } = await supabase.from('payroll_runs').select('*').eq('company_id', company.id).eq('period', periodLabel).maybeSingle();
-                if (existingRun?.details) {
-                  for (const oldDetail of existingRun.details) {
-                    const { data: freshEmp } = await supabase.from('employees').select('ytd_gross,ytd_cpp,ytd_ei,ytd_fed_tax,ytd_prov_tax,ytd_vac,ytd_er_cpp,ytd_er_ei,ytd_base_earnings').eq('id', oldDetail.employee_id).single();
-                    if (freshEmp) {
-                      await supabase.from('employees').update({
-                        ytd_gross:         +Math.max((freshEmp.ytd_gross||0)-(oldDetail.gross||0),0).toFixed(2),
-                        ytd_cpp:           +Math.max((freshEmp.ytd_cpp||0)-(oldDetail.cpp||0),0).toFixed(2),
-                        ytd_ei:            +Math.max((freshEmp.ytd_ei||0)-(oldDetail.ei||0),0).toFixed(2),
-                        ytd_fed_tax:       +Math.max((freshEmp.ytd_fed_tax||0)-(oldDetail.fed_tax||0),0).toFixed(2),
-                        ytd_prov_tax:      +Math.max((freshEmp.ytd_prov_tax||0)-(oldDetail.prov_tax||0),0).toFixed(2),
-                        ytd_vac:           +Math.max((freshEmp.ytd_vac||0)-(oldDetail.vac_pay||0),0).toFixed(2),
-                        ytd_er_cpp:        +Math.max((freshEmp.ytd_er_cpp||0)-(oldDetail.er_cpp||0),0).toFixed(2),
-                        ytd_er_ei:         +Math.max((freshEmp.ytd_er_ei||0)-(oldDetail.er_ei||0),0).toFixed(2),
-                        ytd_base_earnings: +Math.max((freshEmp.ytd_base_earnings||0)-(oldDetail.base_earnings||0),0).toFixed(2),
-                      }).eq('id', oldDetail.employee_id);
-                    }
-                  }
-                  await supabase.from('payroll_runs').delete().eq('company_id', company.id).eq('period', periodLabel);
+                const { data: existingRun } = await supabase.from('payroll_runs').select('id').eq('company_id', company.id).eq('period', periodLabel).maybeSingle();
+                if (existingRun) {
+                  await supabase.from('payroll_runs').delete().eq('id', existingRun.id);
                   setProcessed(false);
                   alert("Period cleared. You can now re-enter hours and process fresh.");
                 } else {
@@ -1892,37 +1885,6 @@ function RunPayrollPage({ company, setPage }) {
     }
   }
   if (overwriteMode) {
-    // Fetch the existing run to reverse its YTD contributions before deleting
-    const { data: existingRun } = await supabase
-      .from('payroll_runs')
-      .select('*')
-      .eq('company_id', company.id)
-      .eq('period', periodLabel)
-      .maybeSingle();
-
-    if (existingRun?.details) {
-      for (const oldDetail of existingRun.details) {
-        const { data: freshEmp } = await supabase
-          .from('employees')
-          .select('ytd_gross,ytd_cpp,ytd_ei,ytd_fed_tax,ytd_prov_tax,ytd_vac,ytd_er_cpp,ytd_er_ei,ytd_base_earnings')
-          .eq('id', oldDetail.employee_id)
-          .single();
-        if (freshEmp) {
-          await supabase.from('employees').update({
-            ytd_gross:         +Math.max((freshEmp.ytd_gross         || 0) - (oldDetail.gross       || 0), 0).toFixed(2),
-            ytd_cpp:           +Math.max((freshEmp.ytd_cpp           || 0) - (oldDetail.cpp         || 0), 0).toFixed(2),
-            ytd_ei:            +Math.max((freshEmp.ytd_ei            || 0) - (oldDetail.ei          || 0), 0).toFixed(2),
-            ytd_fed_tax:       +Math.max((freshEmp.ytd_fed_tax       || 0) - (oldDetail.fed_tax     || 0), 0).toFixed(2),
-            ytd_prov_tax:      +Math.max((freshEmp.ytd_prov_tax      || 0) - (oldDetail.prov_tax    || 0), 0).toFixed(2),
-            ytd_vac:           +Math.max((freshEmp.ytd_vac           || 0) - (oldDetail.vac_pay     || 0), 0).toFixed(2),
-            ytd_er_cpp:        +Math.max((freshEmp.ytd_er_cpp        || 0) - (oldDetail.er_cpp      || 0), 0).toFixed(2),
-            ytd_er_ei:         +Math.max((freshEmp.ytd_er_ei         || 0) - (oldDetail.er_ei       || 0), 0).toFixed(2),
-            ytd_base_earnings: +Math.max((freshEmp.ytd_base_earnings || 0) - (oldDetail.base_earnings || 0), 0).toFixed(2),
-          }).eq('id', oldDetail.employee_id);
-        }
-      }
-    }
-
     await supabase.from('payroll_runs').delete().eq('company_id', company.id).eq('period', periodLabel);
     setOverwriteMode(false);
   }
@@ -1938,61 +1900,66 @@ function RunPayrollPage({ company, setPage }) {
       deductions: +(totals.cpp + totals.ei + totals.tax).toFixed(2),
       net: totals.net,
       status: 'completed',
-      details: rows.map(r => ({
-        employee_id: r.id,
-        name: r.name,
-        province: r.province,
-        emp_type: r.type,
-        rate: r.rate,
-        reg_hrs: r.reg || "0",
-        ot_hrs: r.ot || "0",
-        stat_hrs: r.stat || "0",
-        gross: r.gross,
-        base_earnings: r.baseEarnings,
-        vac_pay: r.vacPay,
-        cpp: r.cpp,
-        ei: r.ei,
-        fed_tax: +(r.fedTax || 0).toFixed(2),
-        prov_tax: +(r.provTax || 0).toFixed(2),
-        tax: r.tax,
-        net: r.net,
-        er_cpp: +(r.cpp || 0).toFixed(2),
-        er_ei: +((r.ei || 0) * 1.4).toFixed(2),
-        ytd_gross:    +((r.ytd_gross    || 0) + r.gross).toFixed(2),
-        ytd_cpp:      +((r.ytd_cpp      || 0) + r.cpp).toFixed(2),
-        ytd_ei:       +((r.ytd_ei       || 0) + r.ei).toFixed(2),
-        ytd_fed_tax:  +((r.ytd_fed_tax  || 0) + (r.fedTax || 0)).toFixed(2),
-        ytd_prov_tax: +((r.ytd_prov_tax || 0) + (r.provTax || 0)).toFixed(2),
-        ytd_vac:           +((r.ytd_vac           || 0) + r.vacPay).toFixed(2),
-        ytd_base_earnings: +((r.ytd_base_earnings || 0) + (r.baseEarnings || 0)).toFixed(2),
-        ytd_er_cpp:        +((r.ytd_er_cpp        || 0) + (r.cpp || 0)).toFixed(2),
-        ytd_er_ei:         +((r.ytd_er_ei         || 0) + ((r.ei || 0) * 1.4)).toFixed(2),
+      details: await Promise.all(rows.map(async r => {
+        const { data: priorRuns } = await supabase
+          .from('payroll_runs')
+          .select('details')
+          .eq('company_id', company.id);
+        let priorGross=0, priorCpp=0, priorEi=0, priorFed=0, priorProv=0, priorVac=0, priorBase=0, priorErCpp=0, priorErEi=0;
+        (priorRuns || []).forEach(run => {
+          (run.details || []).forEach(d => {
+            if (d.employee_id === r.id) {
+              priorGross += (+d.gross||0); priorCpp += (+d.cpp||0); priorEi += (+d.ei||0);
+              priorFed += (+d.fed_tax||0); priorProv += (+d.prov_tax||0); priorVac += (+d.vac_pay||0);
+              priorBase += (+d.base_earnings||0); priorErCpp += (+d.er_cpp||0); priorErEi += (+d.er_ei||0);
+            }
+          });
+        });
+        const openGross = +(r.opening_ytd_gross||0), openCpp = +(r.opening_ytd_cpp||0), openEi = +(r.opening_ytd_ei||0);
+        const openFed = +(r.opening_ytd_fed_tax||0), openProv = +(r.opening_ytd_prov_tax||0), openVac = +(r.opening_ytd_vac||0);
+        const openBase = +(r.opening_ytd_base_earnings||0), openErCpp = +(r.opening_ytd_er_cpp||0), openErEi = +(r.opening_ytd_er_ei||0);
+        return {
+          employee_id: r.id,
+          name: r.name,
+          province: r.province,
+          emp_type: r.type,
+          rate: r.rate,
+          reg_hrs: r.reg || "0",
+          ot_hrs: r.ot || "0",
+          stat_hrs: r.stat || "0",
+          gross: r.gross,
+          base_earnings: r.baseEarnings,
+          vac_pay: r.vacPay,
+          cpp: r.cpp,
+          ei: r.ei,
+          fed_tax: +(r.fedTax || 0).toFixed(2),
+          prov_tax: +(r.provTax || 0).toFixed(2),
+          tax: r.tax,
+          net: r.net,
+          er_cpp: +(r.cpp || 0).toFixed(2),
+          er_ei: +((r.ei || 0) * 1.4).toFixed(2),
+          ytd_gross:    +(openGross + priorGross + r.gross).toFixed(2),
+          ytd_cpp:      +(openCpp   + priorCpp   + r.cpp).toFixed(2),
+          ytd_ei:       +(openEi    + priorEi    + r.ei).toFixed(2),
+          ytd_fed_tax:  +(openFed   + priorFed   + (r.fedTax || 0)).toFixed(2),
+          ytd_prov_tax: +(openProv  + priorProv  + (r.provTax || 0)).toFixed(2),
+          ytd_vac:           +(openVac  + priorVac  + r.vacPay).toFixed(2),
+          ytd_base_earnings: +(openBase + priorBase + (r.baseEarnings || 0)).toFixed(2),
+          ytd_er_cpp:        +(openErCpp + priorErCpp + (r.cpp || 0)).toFixed(2),
+          ytd_er_ei:         +(openErEi  + priorErEi  + ((r.ei || 0) * 1.4)).toFixed(2),
+        };
       }))
     }])
     .select()
     .single();
   if (data) {
     setProcessed(true);
-    if (isRerun) { setSaving(false); return; }
-    for (const r of rows) {
-      const { data: freshEmp } = await supabase
-        .from('employees')
-        .select('ytd_gross,ytd_cpp,ytd_ei,ytd_fed_tax,ytd_prov_tax,ytd_vac,ytd_er_cpp,ytd_er_ei')
-        .eq('id', r.id)
-        .single();
-      const base = freshEmp || {};
-      await supabase.from('employees').update({
-        ytd_gross:    +((base.ytd_gross    || 0) + r.gross).toFixed(2),
-        ytd_cpp:      +((base.ytd_cpp      || 0) + r.cpp).toFixed(2),
-        ytd_ei:       +((base.ytd_ei       || 0) + r.ei).toFixed(2),
-        ytd_fed_tax:  +((base.ytd_fed_tax  || 0) + (r.fedTax || 0)).toFixed(2),
-        ytd_prov_tax: +((base.ytd_prov_tax || 0) + (r.provTax || 0)).toFixed(2),
-        ytd_base_earnings: +((base.ytd_base_earnings || 0) + (r.baseEarnings || 0)).toFixed(2),
-        ytd_vac:      +((base.ytd_vac      || 0) + r.vacPay).toFixed(2),
-        ytd_er_cpp:   +((base.ytd_er_cpp   || 0) + (r.cpp || 0)).toFixed(2),
-        ytd_er_ei:    +((base.ytd_er_ei    || 0) + ((r.ei || 0) * 1.4)).toFixed(2),
-        last_payroll: new Date().toISOString().split('T')[0]
-      }).eq('id', r.id);
+    if (!isRerun) {
+      for (const r of rows) {
+        await supabase.from('employees').update({
+          last_payroll: new Date().toISOString().split('T')[0]
+        }).eq('id', r.id);
+      }
     }
   }
   setSaving(false);
@@ -2303,28 +2270,7 @@ function PaystubsPage({ company }) {
                   <p className={`text-xs ${selectedRun?.id===r.id?"text-blue-200":"text-gray-400"}`}>{r.pay_date}</p>
                 </button>
                 <button onClick={async () => {
-                  if (!window.confirm(`Delete payroll run for ${r.period}? This will reverse YTD values for all employees in this run.`)) return;
-                  // Reverse YTD for each employee in this run
-                  for (const detail of (r.details || [])) {
-                    const { data: freshEmp } = await supabase
-                      .from('employees')
-                      .select('ytd_gross,ytd_cpp,ytd_ei,ytd_fed_tax,ytd_prov_tax,ytd_vac,ytd_er_cpp,ytd_er_ei,ytd_base_earnings')
-                      .eq('id', detail.employee_id)
-                      .single();
-                    if (freshEmp) {
-                      await supabase.from('employees').update({
-                        ytd_gross:         +Math.max((freshEmp.ytd_gross||0)-(detail.gross||0),0).toFixed(2),
-                        ytd_cpp:           +Math.max((freshEmp.ytd_cpp||0)-(detail.cpp||0),0).toFixed(2),
-                        ytd_ei:            +Math.max((freshEmp.ytd_ei||0)-(detail.ei||0),0).toFixed(2),
-                        ytd_fed_tax:       +Math.max((freshEmp.ytd_fed_tax||0)-(detail.fed_tax||0),0).toFixed(2),
-                        ytd_prov_tax:      +Math.max((freshEmp.ytd_prov_tax||0)-(detail.prov_tax||0),0).toFixed(2),
-                        ytd_vac:           +Math.max((freshEmp.ytd_vac||0)-(detail.vac_pay||0),0).toFixed(2),
-                        ytd_er_cpp:        +Math.max((freshEmp.ytd_er_cpp||0)-(detail.er_cpp||0),0).toFixed(2),
-                        ytd_er_ei:         +Math.max((freshEmp.ytd_er_ei||0)-(detail.er_ei||0),0).toFixed(2),
-                        ytd_base_earnings: +Math.max((freshEmp.ytd_base_earnings||0)-(detail.base_earnings||0),0).toFixed(2),
-                      }).eq('id', detail.employee_id);
-                    }
-                  }
+                  if (!window.confirm(`Delete payroll run for ${r.period}?`)) return;
                   await supabase.from('payroll_runs').delete().eq('id', r.id);
                   setRuns(prev => prev.filter(x => x.id !== r.id));
                   if (selectedRun?.id === r.id) { setSelectedRun(null); setSelectedEmp(null); }
@@ -2447,29 +2393,7 @@ function HistoryPage({ company }) {
   const confirmDelete = async () => {
     if (!deleteRun) return;
     setDeleting(true);
-    const toDelete = (deleteRun.details || []).filter(d => deleteSelected[d.employee_id]);
-    const toKeep   = (deleteRun.details || []).filter(d => !deleteSelected[d.employee_id]);
-
-    // Reverse YTD for deleted employees
-    for (const detail of toDelete) {
-      const { data: freshEmp } = await supabase
-        .from('employees')
-        .select('ytd_gross,ytd_cpp,ytd_ei,ytd_fed_tax,ytd_prov_tax,ytd_vac,ytd_er_cpp,ytd_er_ei,ytd_base_earnings')
-        .eq('id', detail.employee_id).single();
-      if (freshEmp) {
-        await supabase.from('employees').update({
-          ytd_gross:         +Math.max((freshEmp.ytd_gross||0)-(detail.gross||0),0).toFixed(2),
-          ytd_cpp:           +Math.max((freshEmp.ytd_cpp||0)-(detail.cpp||0),0).toFixed(2),
-          ytd_ei:            +Math.max((freshEmp.ytd_ei||0)-(detail.ei||0),0).toFixed(2),
-          ytd_fed_tax:       +Math.max((freshEmp.ytd_fed_tax||0)-(detail.fed_tax||0),0).toFixed(2),
-          ytd_prov_tax:      +Math.max((freshEmp.ytd_prov_tax||0)-(detail.prov_tax||0),0).toFixed(2),
-          ytd_vac:           +Math.max((freshEmp.ytd_vac||0)-(detail.vac_pay||0),0).toFixed(2),
-          ytd_er_cpp:        +Math.max((freshEmp.ytd_er_cpp||0)-(detail.er_cpp||0),0).toFixed(2),
-          ytd_er_ei:         +Math.max((freshEmp.ytd_er_ei||0)-(detail.er_ei||0),0).toFixed(2),
-          ytd_base_earnings: +Math.max((freshEmp.ytd_base_earnings||0)-(detail.base_earnings||0),0).toFixed(2),
-        }).eq('id', detail.employee_id);
-      }
-    }
+    const toKeep = (deleteRun.details || []).filter(d => !deleteSelected[d.employee_id]);
 
     if (toKeep.length === 0) {
       // Delete entire run
