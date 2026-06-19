@@ -237,7 +237,10 @@ function calcPayroll(
   vacRate   = 0.04,
   payFreq   = "Semi-monthly",
   td1Fed    = 16452,   // employee's federal TD1 claim 2026
-  td1Prov   = null     // employee's provincial TD1 (null = use province BPA)
+  td1Prov   = null,    // employee's provincial TD1 (null = use province BPA)
+  ytdCppSoFar  = 0,    // CPP withheld YTD before this run
+  ytdCpp2SoFar = 0,    // CPP2 withheld YTD before this run
+  ytdEiSoFar   = 0      // EI withheld YTD before this run
 ) {
   const PP       = PAY_PERIODS[payFreq] || 24;
   const province = emp.province || "ON";
@@ -273,31 +276,31 @@ function calcPayroll(
   const grossPeriod           = +(employmentEarnings + vacPay).toFixed(2);
 
   // ── Step 2: CPP (T4127 Section A) ───────────────────────────────────────────
-  // Annual CPP-pensionable earnings (gross × PP − basic exemption)
   // CPP on gross including vacation pay (CRA includes vac pay in pensionable earnings)
-  // T4127 Chapter 6: CPP per-period exemption method (exact match to PDOC)
-  const annualPensionable = grossPeriod * PP;
+  // Cap is based on REMAINING ROOM vs YTD already withheld, not a flat annualMax/PP.
   const periodExemption   = CPP_EXEMPTION / PP; // keep full precision, no rounding
   const periodPensionable = Math.max(grossPeriod - periodExemption, 0);
-  const periodCPP         = +Math.min(periodPensionable * CPP_RATE, CPP_MAX_CONTRIB / PP).toFixed(2);
-  const annualCPP         = periodCPP * PP;
+  const cppRoomLeft       = Math.max(CPP_MAX_CONTRIB - ytdCppSoFar, 0);
+  const periodCPP         = +Math.min(periodPensionable * CPP_RATE, cppRoomLeft).toFixed(2);
+  const annualCPP         = ytdCppSoFar + periodCPP;
 
   // CPP2: 4% on earnings between YMPE ($74,600) and YAMPE ($85,000)
-  // T4127 Chapter 6, Table 8.6
   const annualPensionableForCPP2 = grossPeriod * PP;
   let periodCPP2 = 0;
   if (annualPensionableForCPP2 > CPP2_THRESHOLD) {
     const cpp2Pensionable = Math.min(annualPensionableForCPP2, 85000) - CPP2_THRESHOLD;
-    periodCPP2 = +Math.min((cpp2Pensionable / PP) * CPP2_RATE, CPP2_MAX / PP).toFixed(2);
+    const cpp2RoomLeft    = Math.max(CPP2_MAX - ytdCpp2SoFar, 0);
+    periodCPP2 = +Math.min((cpp2Pensionable / PP) * CPP2_RATE, cpp2RoomLeft).toFixed(2);
   }
-  const annualCPP2 = periodCPP2 * PP;
+  const annualCPP2 = ytdCpp2SoFar + periodCPP2;
 
   const totalCPP = +periodCPP.toFixed(2);
 
   // ── Step 3: EI (T4127 Section B) ────────────────────────────────────────────
-  // CRA: simply rate × gross per period. Annual max tracked via YTD.
-  const annualEI = Math.min(grossPeriod * PP * EI_RATE, EI_MAX_CONTRIB);
-  const periodEI = +(grossPeriod * EI_RATE).toFixed(2);
+  // Cap against remaining room vs YTD already withheld.
+  const eiRoomLeft = Math.max(EI_MAX_CONTRIB - ytdEiSoFar, 0);
+  const periodEI   = +Math.min(grossPeriod * EI_RATE, eiRoomLeft).toFixed(2);
+  const annualEI   = ytdEiSoFar + periodEI;
 
   // ── Step 4: Federal Tax (T4127 Section C — Method 1) ────────────────────────
   // Annualize
@@ -1682,12 +1685,12 @@ async function cascadeRecalcYTD(companyId, fromPeriodSeqExclusive, employeeIds) 
       const emp = empById[d.employee_id];
       const prev = lastYtd[d.employee_id];
       const open = emp ? {
-        gross: +(emp.opening_ytd_gross||0), cpp: +(emp.opening_ytd_cpp||0), ei: +(emp.opening_ytd_ei||0),
+        gross: +(emp.opening_ytd_gross||0), cpp: +(emp.opening_ytd_cpp||0), cpp2: +(emp.opening_ytd_cpp2||0), ei: +(emp.opening_ytd_ei||0),
         fed: +(emp.opening_ytd_fed_tax||0), prov: +(emp.opening_ytd_prov_tax||0), vac: +(emp.opening_ytd_vac||0),
         baseEarn: +(emp.opening_ytd_base_earnings||0), erCpp: +(emp.opening_ytd_er_cpp||0), erEi: +(emp.opening_ytd_er_ei||0),
-      } : { gross:0,cpp:0,ei:0,fed:0,prov:0,vac:0,baseEarn:0,erCpp:0,erEi:0 };
+      } : { gross:0,cpp:0,cpp2:0,ei:0,fed:0,prov:0,vac:0,baseEarn:0,erCpp:0,erEi:0 };
       const base = prev ? {
-        gross: +(prev.ytd_gross||0), cpp: +(prev.ytd_cpp||0), ei: +(prev.ytd_ei||0),
+        gross: +(prev.ytd_gross||0), cpp: +(prev.ytd_cpp||0), cpp2: +(prev.ytd_cpp2||0), ei: +(prev.ytd_ei||0),
         fed: +(prev.ytd_fed_tax||0), prov: +(prev.ytd_prov_tax||0), vac: +(prev.ytd_vac||0),
         baseEarn: +(prev.ytd_base_earnings||0), erCpp: +(prev.ytd_er_cpp||0), erEi: +(prev.ytd_er_ei||0),
       } : open;
@@ -1696,6 +1699,7 @@ async function cascadeRecalcYTD(companyId, fromPeriodSeqExclusive, employeeIds) 
         ...d,
         ytd_gross:    +(base.gross + (+d.gross||0)).toFixed(2),
         ytd_cpp:      +(base.cpp   + (+d.cpp||0)).toFixed(2),
+        ytd_cpp2:     +(base.cpp2  + (+d.cpp2||0)).toFixed(2),
         ytd_ei:       +(base.ei    + (+d.ei||0)).toFixed(2),
         ytd_fed_tax:  +(base.fed   + (+d.fed_tax||0)).toFixed(2),
         ytd_prov_tax: +(base.prov  + (+d.prov_tax||0)).toFixed(2),
@@ -1741,11 +1745,33 @@ function RunPayrollPage({ company, setPage }) {
         const initSelected = {};
         data.forEach(e => { initSelected[e.id] = true; });
         setSelectedEmps(initSelected);
+
+        // Pull each employee's YTD CPP/CPP2/EI as of their most recent prior run
+        // (falls back to opening balances if no prior run exists yet).
+        const ytdMap = {};
+        for (const e of data) {
+          const { data: priorRuns } = await supabase
+            .from('payroll_runs')
+            .select('details')
+            .eq('company_id', company.id)
+            .order('period_seq', { ascending: false })
+            .limit(20);
+          let found = null;
+          for (const run of (priorRuns || [])) {
+            const match = (run.details || []).find(d => d.employee_id === e.id);
+            if (match) { found = match; break; }
+          }
+          ytdMap[e.id] = found
+            ? { cpp: +(found.ytd_cpp || 0), cpp2: +(found.ytd_cpp2 || 0), ei: +(found.ytd_ei || 0) }
+            : { cpp: +(e.opening_ytd_cpp || 0), cpp2: +(e.opening_ytd_cpp2 || 0), ei: +(e.opening_ytd_ei || 0) };
+        }
+        setYtdSoFar(ytdMap);
       }
     };
     fetchEmps();
   }, [company.id]);
   const [hours, setHours] = useState({});
+  const [ytdSoFar, setYtdSoFar] = useState({}); // { [empId]: { cpp, cpp2, ei } }
   const [processed, setProcessed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -1763,7 +1789,8 @@ function RunPayrollPage({ company, setPage }) {
     const fedTD1 = e.td1_fed || 16452;
     const provTD1 = e.td1_prov || null;
     const empFreq = e.payroll_schedule || selectedFreq;
-    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, h.statMode || "amount", VAC_RATES[h.vacRate] ?? 0.04, empFreq, fedTD1, provTD1), ...h };
+    const ytd = ytdSoFar[e.id] || { cpp: 0, cpp2: 0, ei: 0 };
+    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, h.statMode || "amount", VAC_RATES[h.vacRate] ?? 0.04, empFreq, fedTD1, provTD1, ytd.cpp, ytd.cpp2, ytd.ei), ...h };
   });
 
   const totals = rows.reduce((a, r) => ({
@@ -2025,16 +2052,16 @@ function RunPayrollPage({ company, setPage }) {
         // Opening balances only apply if there is NO prior run yet for this employee
         // (i.e. this is the first run processed since they were added / their opening
         // balance was set). Once a real run exists, the chain takes over permanently.
-        const openGross = +(r.opening_ytd_gross||0), openCpp = +(r.opening_ytd_cpp||0), openEi = +(r.opening_ytd_ei||0);
+        const openGross = +(r.opening_ytd_gross||0), openCpp = +(r.opening_ytd_cpp||0), openCpp2 = +(r.opening_ytd_cpp2||0), openEi = +(r.opening_ytd_ei||0);
         const openFed = +(r.opening_ytd_fed_tax||0), openProv = +(r.opening_ytd_prov_tax||0), openVac = +(r.opening_ytd_vac||0);
         const openBase = +(r.opening_ytd_base_earnings||0), openErCpp = +(r.opening_ytd_er_cpp||0), openErEi = +(r.opening_ytd_er_ei||0);
 
         const base = prevYtd ? {
-          gross: +(prevYtd.ytd_gross||0), cpp: +(prevYtd.ytd_cpp||0), ei: +(prevYtd.ytd_ei||0),
+          gross: +(prevYtd.ytd_gross||0), cpp: +(prevYtd.ytd_cpp||0), cpp2: +(prevYtd.ytd_cpp2||0), ei: +(prevYtd.ytd_ei||0),
           fed: +(prevYtd.ytd_fed_tax||0), prov: +(prevYtd.ytd_prov_tax||0), vac: +(prevYtd.ytd_vac||0),
           baseEarn: +(prevYtd.ytd_base_earnings||0), erCpp: +(prevYtd.ytd_er_cpp||0), erEi: +(prevYtd.ytd_er_ei||0),
         } : {
-          gross: openGross, cpp: openCpp, ei: openEi, fed: openFed, prov: openProv,
+          gross: openGross, cpp: openCpp, cpp2: openCpp2, ei: openEi, fed: openFed, prov: openProv,
           vac: openVac, baseEarn: openBase, erCpp: openErCpp, erEi: openErEi,
         };
 
@@ -2063,6 +2090,7 @@ function RunPayrollPage({ company, setPage }) {
           er_ei: +((r.ei || 0) * 1.4).toFixed(2),
           ytd_gross:    +(base.gross + r.gross).toFixed(2),
           ytd_cpp:      +(base.cpp   + r.cpp).toFixed(2),
+          ytd_cpp2:     +(base.cpp2  + (r.cpp2 || 0)).toFixed(2),
           ytd_ei:       +(base.ei    + r.ei).toFixed(2),
           ytd_fed_tax:  +(base.fed   + (r.fedTax || 0)).toFixed(2),
           ytd_prov_tax: +(base.prov  + (r.provTax || 0)).toFixed(2),
