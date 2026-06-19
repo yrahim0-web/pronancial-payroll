@@ -1756,7 +1756,8 @@ function RunPayrollPage({ company, setPage }) {
     const h = hours[e.id] || { reg: defaultReg, ot:"0", stat:"0", statMode:"amount", bonus:"0", vacRate: defaultVac + "%" };
     const fedTD1 = e.td1_fed || 16452;
     const provTD1 = e.td1_prov || null;
-    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, h.statMode || "amount", VAC_RATES[h.vacRate] ?? 0.04, selectedFreq, fedTD1, provTD1), ...h };
+    const empFreq = e.payroll_schedule || selectedFreq;
+    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, h.statMode || "amount", VAC_RATES[h.vacRate] ?? 0.04, empFreq, fedTD1, provTD1), ...h };
   });
 
   const totals = rows.reduce((a, r) => ({
