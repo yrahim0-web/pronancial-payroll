@@ -282,9 +282,15 @@ function calcPayroll(
   const periodCPP         = +Math.min(periodPensionable * CPP_RATE, CPP_MAX_CONTRIB / PP).toFixed(2);
   const annualCPP         = periodCPP * PP;
 
-  // CPP2 disabled to match Excel benchmark — base CPP1 only
-  const periodCPP2 = 0;
-  const annualCPP2 = 0;
+  // CPP2: 4% on earnings between YMPE ($74,600) and YAMPE ($85,000)
+  // T4127 Chapter 6, Table 8.6
+  const annualPensionableForCPP2 = grossPeriod * PP;
+  let periodCPP2 = 0;
+  if (annualPensionableForCPP2 > CPP2_THRESHOLD) {
+    const cpp2Pensionable = Math.min(annualPensionableForCPP2, 85000) - CPP2_THRESHOLD;
+    periodCPP2 = +Math.min((cpp2Pensionable / PP) * CPP2_RATE, CPP2_MAX / PP).toFixed(2);
+  }
+  const annualCPP2 = periodCPP2 * PP;
 
   const totalCPP = +periodCPP.toFixed(2);
 
