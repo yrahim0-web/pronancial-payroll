@@ -475,7 +475,7 @@ const Modal = ({ open, onClose, title, children, wide }) => {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
-      <div className={`bg-white rounded-2xl shadow-2xl w-full mx-4 ${wide ? "max-w-2xl" : "max-w-lg"} max-h-[90vh] overflow-y-auto`}>
+      <div className={`bg-white rounded-2xl shadow-2xl w-full mx-2 sm:mx-4 ${wide ? "max-w-2xl" : "max-w-lg"} max-h-[95vh] sm:max-h-[90vh] overflow-y-auto`}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"><X size={16} /></button>
@@ -1132,7 +1132,7 @@ function CompaniesPage({ companies, setCompanies, setSelectedCompany, setPage })
         </div>
       </Card>
       <Modal open={showModal} onClose={() => setShowModal(false)} title={editCompany ? "Edit Company" : "Add New Company"} wide>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Legal Company Name" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="Maple Ridge Inc." />
           <Input label="Operating Name" value={form.opName} onChange={e=>setForm(p=>({...p,opName:e.target.value}))} placeholder="Maple Ridge" />
           <Input label="CRA Business Number" value={form.bn} onChange={e=>setForm(p=>({...p,bn:e.target.value}))} placeholder="123456789RP0001" />
@@ -1467,7 +1467,7 @@ useEffect(() => {
         )}
       </Card>
       <Modal open={showModal} onClose={() => { setShowModal(false); setEditEmployee(null); }} title={editEmployee ? "Edit Employee" : "Add New Employee"} wide>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="First Name" value={form.firstName} onChange={e=>setForm(p=>({...p,firstName:e.target.value}))} placeholder="Jane" />
           <Input label="Last Name" value={form.lastName} onChange={e=>setForm(p=>({...p,lastName:e.target.value}))} placeholder="Smith" />
           <Input label="Email Address" type="email" placeholder="jane@company.ca" />
@@ -1519,7 +1519,7 @@ useEffect(() => {
               {BIWEEKLY_PERIODS.map(p => (<option key={p.period} value={p.period}>Period {p.period}: {p.start} – {p.end} (Pay: {p.payDate})</option>))}
             </select>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input label="YTD Base Earnings ($)" type="number" value={form.ytd_base_earnings||""} onChange={e=>setForm(p=>({...p,ytd_base_earnings:e.target.value}))} placeholder="0.00" />
           <Input label="YTD Gross ($)" type="number" value={form.ytd_gross||""} onChange={e=>setForm(p=>({...p,ytd_gross:e.target.value}))} placeholder="0.00" />
             <Input label="YTD CPP ($)" type="number" value={form.ytd_cpp||""} onChange={e=>setForm(p=>({...p,ytd_cpp:e.target.value}))} placeholder="0.00" />
@@ -1531,7 +1531,7 @@ useEffect(() => {
         <div className="border-t border-gray-100 pt-4 mt-2">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Employer YTD Contributions</p>
           <p className="text-xs text-gray-400 mb-3">Enter employer year-to-date contributions if mid-year transfer.</p>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input label="Employer YTD CPP ($)" type="number" value={form.ytd_er_cpp||""} onChange={e=>setForm(p=>({...p,ytd_er_cpp:e.target.value}))} placeholder="0.00" />
             <Input label="Employer YTD EI ($)" type="number" value={form.ytd_er_ei||""} onChange={e=>setForm(p=>({...p,ytd_er_ei:e.target.value}))} placeholder="0.00" />
           </div>
@@ -1923,7 +1923,10 @@ function RunPayrollPage({ company, setPage }) {
             </div>
           )}
         </div>
-        <div className="overflow-x-auto">
+        <div className="md:hidden px-3 py-2 bg-blue-50 text-xs text-blue-600 flex items-center gap-1 font-medium">
+            <ChevronRight size={12}/> Swipe table left to see all columns →
+          </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-gray-50">
               {["","Employee","Reg Hrs","OT Hrs (1.5×)","Stat Pay ($)","Bonus","Vac %","Base Pay","OT Pay","Vac Pay","Gross","CPP","EI","Tax","Net Pay"].map(h=>(
@@ -2026,7 +2029,7 @@ function RunPayrollPage({ company, setPage }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 p-5">
           <h3 className="text-sm font-semibold text-gray-800 mb-4">Payroll Summary</h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               {label:"Gross Payroll",v:`$${totals.gross.toFixed(2)}`,color:"text-gray-900"},
               {label:"Total Employee Deductions",v:`-$${(totals.cpp+totals.ei+totals.tax).toFixed(2)}`,color:"text-red-600"},
@@ -2883,7 +2886,7 @@ function SettingsPage({ company, setSelectedCompany }) {
       </div>
       <Card className="p-6">
         <h3 className="text-sm font-semibold text-gray-800 mb-4">Legal Information</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input label="Legal Company Name" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} />
           <Input label="CRA Business Number" value={form.bn} onChange={e=>setForm(p=>({...p,bn:e.target.value}))} />
           <Input label="Payroll Account Number" defaultValue={company.bn} />
@@ -2896,7 +2899,7 @@ function SettingsPage({ company, setSelectedCompany }) {
       </Card>
       <Card className="p-6">
         <h3 className="text-sm font-semibold text-gray-800 mb-4">Payroll Defaults</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Select label="Payroll Frequency"><option>Semi-monthly</option><option>Bi-weekly</option><option>Monthly</option></Select>
           <Select label="Remittance Frequency"><option>Regular (Monthly)</option><option>Quarterly</option><option>Accelerated</option></Select>
           <Input label="Default Vacation Pay %" defaultValue="4" />
@@ -2967,7 +2970,10 @@ useEffect(() => {
 }, []);
   useEffect(() => {
     // Bump root font size for bigger, more readable text everywhere.
-    document.documentElement.style.fontSize = '128%';
+    document.documentElement.style.fontSize = window.innerWidth < 768 ? '100%' : '128%';
+    window.addEventListener('resize', () => {
+      document.documentElement.style.fontSize = window.innerWidth < 768 ? '100%' : '128%';
+    });
 
     // Tighten the biggest space-consumers (page padding, card padding, table
     // row padding, grid gaps) so the larger text above has room to grow
@@ -2987,7 +2993,18 @@ useEffect(() => {
     document.head.appendChild(styleTag);
   }, []);
   const [page, setPage] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
+
+  useEffect(() => {
+    const onResize = () => {
+      const mobile = window.innerWidth < 1024;
+      setIsMobile(mobile);
+      if (mobile) setSidebarOpen(false);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [theme, setTheme] = useState(() => localStorage.getItem('pron_theme') || 'light');
   const isDark = theme === 'dark';
   const switchTheme = (t) => { setTheme(t); localStorage.setItem('pron_theme', t); };
@@ -3061,7 +3078,17 @@ useEffect(() => {
   return (
     <div style={{background:isDark?'#0c1117':'#f0f4f8',fontFamily:'Inter,system-ui,sans-serif'}} className="flex h-screen overflow-hidden transition-all duration-200">
       {/* Sidebar */}
-      <aside style={{width:sidebarOpen?'224px':'64px',background:isDark?'#141b24':'#ffffff',borderRight:`1px solid ${isDark?'#1e2d40':'#f1f5f9'}`}} className="flex-shrink-0 flex flex-col transition-all duration-200 h-full">
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/40 z-40" />
+      )}
+      <aside style={{
+          width: isMobile ? '224px' : (sidebarOpen ? '224px' : '64px'),
+          background: isDark?'#141b24':'#ffffff',
+          borderRight:`1px solid ${isDark?'#1e2d40':'#f1f5f9'}`,
+          position: isMobile ? 'fixed' : 'relative',
+          left: isMobile ? (sidebarOpen ? '0' : '-224px') : 'auto',
+          top: 0, height: '100vh', zIndex: 50,
+        }} className="flex-shrink-0 flex flex-col transition-all duration-200">
         <div style={{borderBottom:`1px solid ${isDark?'#1e2d40':'#f1f5f9'}`}} className="flex items-center gap-3 px-4 py-4 h-14">
           <div className="w-7 h-7 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <DollarSign size={14} className="text-white" />
@@ -3070,7 +3097,7 @@ useEffect(() => {
         </div>
         <nav className="flex-1 py-3 space-y-0.5 px-2 overflow-y-auto">
           {navItems.map(item => (
-            <button key={item.id} onClick={() => setPage(item.id)} title={!sidebarOpen ? item.label : ""}
+            <button key={item.id} onClick={() => { setPage(item.id); if (isMobile) setSidebarOpen(false); }} title={!sidebarOpen ? item.label : ""}
               style={{color: page===item.id?'#ffffff':isDark?'#6b7fa3':'#64748b', background: page===item.id?'#2563eb':'transparent'}}
               onMouseEnter={e=>{if(page!==item.id)e.currentTarget.style.background=isDark?'#1a2332':'#f8fafc'}}
               onMouseLeave={e=>{if(page!==item.id)e.currentTarget.style.background='transparent'}}
