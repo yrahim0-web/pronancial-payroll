@@ -2196,9 +2196,13 @@ function PaystubsPage({ company }) {
   const [runs, setRuns] = useState([]);
   const [selectedRun, setSelectedRun] = useState(null);
   const [selectedEmp, setSelectedEmp] = useState(null);
+  const [bulkDownloading, setBulkDownloading] = useState(false);
+  useEffect(() => { window.__pronancialCurrentEmp = selectedEmp; window.__pronancialCurrentRun = selectedRun; }, [selectedEmp, selectedRun]);
   const paystubRef = useRef(null);
 
-  const downloadPDF = async () => {
+  const downloadPDF = async (empArg, runArg) => {
+    const selectedEmp = empArg !== undefined ? empArg : window.__pronancialCurrentEmp;
+    const selectedRun = runArg !== undefined ? runArg : window.__pronancialCurrentRun;
     if (!selectedEmp || !selectedRun) return;
     try {
       const { default: jsPDF } = await import('jspdf');
@@ -2517,6 +2521,21 @@ function PaystubsPage({ company }) {
                 <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 transition-colors"><Printer size={13}/> Print</button>
                 <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-600 hover:bg-gray-50 transition-colors"><Send size={13}/> Email</button>
                 <button onClick={downloadPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-medium hover:bg-blue-700 transition-colors"><Download size={13}/> PDF</button>
+                <button
+                  onClick={async () => {
+                    if (!selectedRun?.details?.length) return;
+                    setBulkDownloading(true);
+                    for (const emp of selectedRun.details) {
+                      await downloadPDF(emp, selectedRun);
+                      await new Promise(res => setTimeout(res, 400));
+                    }
+                    setBulkDownloading(false);
+                  }}
+                  disabled={bulkDownloading || !selectedRun?.details?.length}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-medium hover:bg-emerald-700 disabled:bg-gray-300 transition-colors"
+                >
+                  <Download size={13}/> {bulkDownloading ? "Downloading..." : `Download All (${selectedRun?.details?.length || 0})`}
+                </button>
               </div>
             </div>
               <div ref={paystubRef} className="border border-gray-200 rounded-2xl overflow-hidden">
