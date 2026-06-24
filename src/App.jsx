@@ -337,8 +337,8 @@ function calcPayroll(
   const annualBaseOnly = baseEarnings * PP;
   const K4 = 0.14 * Math.min(annualBaseOnly, 1500);
   const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
-  const annualFedTax    = Math.round(annualFedTaxRaw);
-  const periodFedTax    = +(annualFedTax / PP).toFixed(2);
+  const annualFedTax    = annualFedTaxRaw;
+  const periodFedTax    = +Math.round(annualFedTax / PP * 100) / 100;
   
   // ── Step 5: Provincial Tax (T4127 Section D) ─────────────────────────────────
   const provBPA        = td1Prov ?? provData.bpa;
@@ -373,8 +373,8 @@ function calcPayroll(
     annualProvTax = Math.max(0, annualProvTax - onTaxReduction);
   }
 
-  const annualProvTaxRounded = Math.round(annualProvTax);
-  const periodProvTax = +(annualProvTaxRounded / PP).toFixed(2);
+  const annualProvTaxRounded = annualProvTax;
+  const periodProvTax = +Math.round(annualProvTaxRounded / PP * 100) / 100;
 
   // ── Step 6: Net Pay ──────────────────────────────────────────────────────────
   const totalTax = +(periodFedTax + periodProvTax).toFixed(2);
