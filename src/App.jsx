@@ -1184,6 +1184,9 @@ useEffect(() => {
   const [importError, setImportError] = useState("");
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkResults, setBulkResults] = useState([]);
+  const [bulkPayType, setBulkPayType] = useState("Hourly");
+  const [bulkFreq, setBulkFreq] = useState("Bi-weekly");
+  const [bulkVacRate, setBulkVacRate] = useState("4");
 
   const extractPaystubData = async (file) => {
     let flat = [];
@@ -1278,15 +1281,27 @@ useEffect(() => {
     const results = [];
     const normalize = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
+    // Extract a likely employee name from the filename itself, e.g.
+    // "Paystub- AISWARIYA VINCENT 26 Jun A.pdf" -> "AISWARIYA VINCENT"
+    const extractNameFromFilename = (filename) => {
+      let base = filename.replace(/\.(pdf|xlsx|xls)$/i, "");
+      base = base.replace(/^paystub\s*-\s*/i, "").replace(/^paystub\s+/i, "");
+      // Strip a trailing date/period chunk like "26 Jun A", "2026 Jun A", "Jun 2026", etc.
+      base = base.replace(/\s+\d{1,4}\s+[A-Za-z]{3,9}(\s+[A-Za-z0-9]{1,3})?\s*$/i, "");
+      base = base.replace(/\s+[A-Za-z]{3,9}\s+\d{1,4}(\s+[A-Za-z0-9]{1,3})?\s*$/i, "");
+      return base.trim();
+    };
+
     for (const file of files) {
       try {
         const data = await extractPaystubData(file);
-        if (!data.fullName) {
-          results.push({ file: file.name, status: "skipped", reason: "Could not read employee name" });
+        const fullName = data.fullName || extractNameFromFilename(file.name);
+        if (!fullName) {
+          results.push({ file: file.name, status: "skipped", reason: "Could not determine employee name from file or filename" });
           continue;
         }
 
-        const target = normalize(data.fullName);
+        const target = normalize(fullName);
         const match = employees.find(emp => normalize(emp.name) === target);
 
         if (match) {
@@ -1306,22 +1321,24 @@ useEffect(() => {
           opening_ytd_er_ei: parseFloat(data.ytd_er_ei) || 0,
         };
 
-        const rate = data.salary ? parseFloat(data.salary) : (data.rate ? parseFloat(data.rate) : 60000);
-        const type = data.salary ? "Salary" : "Hourly";
+        const extractedRate = bulkPayType === "Salary"
+          ? (data.salary ? parseFloat(data.salary) : (data.rate ? parseFloat(data.rate) : 60000))
+          : (data.rate ? parseFloat(data.rate) : (data.salary ? parseFloat(data.salary) : 20));
+
         const { data: inserted, error } = await supabase
           .from('employees')
           .insert([{
             company_id: company.id,
-            name: data.fullName,
+            name: fullName,
             position: "Employee",
             province: "ON",
-            type,
-            rate,
+            type: bulkPayType,
+            rate: extractedRate,
             status: "active",
             sin: "***-***-000",
             td1_fed: 16452,
-            payroll_schedule: "Semi-monthly",
-            vac_rate: "4%",
+            payroll_schedule: bulkFreq,
+            vac_rate: bulkVacRate + "%",
             ...ytdPayload,
             ytd_gross: 0, ytd_cpp: 0, ytd_ei: 0, ytd_fed_tax: 0, ytd_prov_tax: 0,
             ytd_vac: 0, ytd_er_cpp: 0, ytd_er_ei: 0, ytd_base_earnings: 0,
@@ -1330,7 +1347,7 @@ useEffect(() => {
           .single();
         if (error) throw error;
         setEmployees(prev => [...prev, inserted]);
-        results.push({ file: file.name, status: "added", name: data.fullName });
+        results.push({ file: file.name, status: "added", name: fullName });
       } catch (err) {
         results.push({ file: file.name, status: "error", reason: err.message });
       }
@@ -1572,6 +1589,32 @@ useEffect(() => {
       <div className="border border-dashed border-emerald-300 bg-emerald-50 rounded-2xl p-4">
         <p className="text-xs font-semibold text-emerald-700 mb-1">📂 Bulk Import New Employees from Paystubs</p>
         <p className="text-xs text-emerald-600 mb-2">Use this only for onboarding new employees for the first time. Select all paystub PDF/Excel files from a pay period folder — any name that already exists in your employee list is skipped automatically and left untouched.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+          <div>
+            <label className="block text-xs font-medium text-emerald-700 mb-1">Pay Type (applies to all in this batch)</label>
+            <select value={bulkPayType} onChange={e=>setBulkPayType(e.target.value)} className="w-full px-3 py-2 text-sm border border-emerald-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400">
+              <option>Hourly</option>
+              <option>Salary</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-emerald-700 mb-1">Payroll Frequency</label>
+            <select value={bulkFreq} onChange={e=>setBulkFreq(e.target.value)} className="w-full px-3 py-2 text-sm border border-emerald-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400">
+              <option>Weekly</option>
+              <option>Bi-weekly</option>
+              <option>Semi-monthly</option>
+              <option>Monthly</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-emerald-700 mb-1">Vacation Pay %</label>
+            <select value={bulkVacRate} onChange={e=>setBulkVacRate(e.target.value)} className="w-full px-3 py-2 text-sm border border-emerald-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400">
+              <option value="4">4%</option>
+              <option value="6">6%</option>
+              <option value="8">8%</option>
+            </select>
+          </div>
+        </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <span className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors">{bulkImporting ? "Processing..." : "Choose Files"}</span>
           <input type="file" accept=".xlsx,.xls,.pdf" multiple className="hidden" onChange={handleBulkPaystubImport} disabled={bulkImporting} />
