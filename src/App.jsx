@@ -1212,66 +1212,54 @@ useEffect(() => {
       flat = rows.flat().map(v => String(v).trim());
     }
 
-    const findAfterLabel = (labels) => {
-      for (const label of labels) {
-        const labelWords = label.toLowerCase().split(" ");
-        for (let i = 0; i < flat.length - 1; i++) {
-          const window = flat.slice(i, i + labelWords.length).join(" ").toLowerCase();
-          if (window.includes(label.toLowerCase())) {
-            for (let j = i + 1; j < Math.min(i + 6, flat.length); j++) {
-              const val = String(flat[j]).replace(/[$,()]/g, "").trim();
-              if (val && !isNaN(parseFloat(val)) && parseFloat(val) > 0) return val;
-            }
-          }
-        }
+    // ── This payroll provider's PDF layout: label sits inline with its own
+    // numbers (FED.TAX/CPP/EI), but the SALARY/HOURS/RATE row label is rendered
+    // separately, so we locate values by position relative to known landmarks
+    // instead of "label immediately before value". ──────────────────────────
+    const clean = (t) => String(t).replace(/[$,%()]/g, "").trim();
+    const isNum = (t) => /^-?\d+(\.\d+)?$/.test(clean(t));
+    const toNum = (t) => parseFloat(clean(t)) || 0;
+    const findIdx = (re) => flat.findIndex(t => re.test(t));
+    const findLastIdx = (re, from = 0) => {
+      let last = -1;
+      for (let i = from; i < flat.length; i++) if (re.test(flat[i])) last = i;
+      return last;
+    };
+    const numbersAfter = (idx, max) => {
+      const out = [];
+      for (let i = idx + 1; i < flat.length && out.length < max; i++) {
+        if (isNum(flat[i])) out.push(toNum(flat[i]));
+        else if (out.length > 0) break;
       }
-      return "";
+      return out;
     };
 
-    const findText = (labels) => {
-      for (const label of labels) {
-        for (let i = 0; i < flat.length - 1; i++) {
-          if (flat[i].toLowerCase().includes(label.toLowerCase())) {
-            const next = flat[i + 1];
-            if (next && !/^\d/.test(next)) return next;
-          }
-        }
-      }
-      return "";
-    };
+    // Name: every token before the literal "Employee" label
+    const empWordIdx = findIdx(/^employee$/i);
+    const fullNameFromPdf = empWordIdx > 0 ? flat.slice(0, empWordIdx).join(" ").trim() : "";
 
-    const findRate = () => {
-      for (let i = 0; i < flat.length; i++) {
-        const v = flat[i].replace(/[$,]/g, "");
-        if (/^\d+(\.\d+)?$/.test(v) && parseFloat(v) > 10) {
-          const ctx = flat.slice(Math.max(0,i-2), i+2).join(" ").toLowerCase();
-          if (ctx.includes("rate") || ctx.includes("/hr") || ctx.includes("hourly") || ctx.includes("salary") || ctx.includes("/yr")) {
-            return v;
-          }
-        }
-      }
-      return "";
-    };
+    const fedIdx = findIdx(/^fed\.?tax$/i);
+    const cppIdx = findIdx(/^cpp$/i);
+    const eiIdx  = findIdx(/^ei$/i);
 
-    const fullName = findText(["employee", "name"]);
-    const extractedRate = findRate();
-    const ytdFedTax = findAfterLabel(["fed.tax", "fed tax", "fedtax", "federal"]);
+    const fed = fedIdx > -1 ? numbersAfter(fedIdx, 4) : [];
+    const cpp = cppIdx > -1 ? numbersAfter(cppIdx, 4) : [];
+    const ei  = eiIdx  > -1 ? numbersAfter(eiIdx, 8) : []; // EI's 4 + VAC.PAY's 4 right after
 
-    return {
-      fullName: fullName || "",
-      salary: extractedRate && parseFloat(extractedRate) > 1000 ? extractedRate : "",
-      rate: extractedRate && parseFloat(extractedRate) <= 200 ? extractedRate : "",
-      ytd_base_earnings: findAfterLabel(["salary", "base salary", "regular", "amount"]),
-      ytd_gross: findAfterLabel(["year to date", "ytd gross", "gross pay", "total gross"]),
-      ytd_cpp: findAfterLabel(["cpp"]),
-      ytd_ei: findAfterLabel(["ei"]),
-      ytd_fed_tax: ytdFedTax ? (parseFloat(ytdFedTax)/2).toFixed(2) : "",
-      ytd_prov_tax: ytdFedTax ? (parseFloat(ytdFedTax)/2).toFixed(2) : "",
-      ytd_vac: findAfterLabel(["vac.pay", "vac pay", "vacation"]),
-      ytd_er_cpp: findAfterLabel(["employer cpp", "er cpp"]),
-      ytd_er_ei: findAfterLabel(["employer ei", "er ei"]),
-    };
-  };
+    const [, fedYtd] = fed;
+    const [, cppYtd, , erCppYtd] = cpp;
+    const [, eiYtd, , erEiYtd, , vacRate, , vacYtd] = ei;
+
+    // Hours/Rate/Amount/YTD row: the 4 numbers immediately before FED.TAX
+    let hours = "", rate = "", ytdBase = "";
+    if (fedIdx > -1) {
+      const numericBefore = flat.slice(0, fedIdx).filter(isNum).map(toNum);
+      const last4 = numericBefore.slice(-4);
+      [hours, rate, , ytdBase] = last4;
+    }
+
+    // YEAR TO DATE summary row (gross, deductions, net)
+    const ytdLabelIdx = findIdx(/^date$/i);
 
   const handleBulkPaystubImport = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -1338,7 +1326,7 @@ useEffect(() => {
             sin: "***-***-000",
             td1_fed: 16452,
             payroll_schedule: bulkFreq,
-            vac_rate: bulkVacRate + "%",
+            vac_rate: (data.vac_rate_pct || bulkVacRate) + "%",
             ...ytdPayload,
             ytd_gross: 0, ytd_cpp: 0, ytd_ei: 0, ytd_fed_tax: 0, ytd_prov_tax: 0,
             ytd_vac: 0, ytd_er_cpp: 0, ytd_er_ei: 0, ytd_base_earnings: 0,
@@ -1364,119 +1352,30 @@ useEffect(() => {
     setImporting(true);
     setImportError("");
     try {
-      let flat = [];
-
-      if (file.name.endsWith('.pdf')) {
-        // ── PDF extraction via pdf.js ──────────────────────────────────────
-        const pdfjsLib = await import('pdfjs-dist/build/pdf');
-        const pdfWorkerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
-        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-        const buffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-        let fullText = "";
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
-          fullText += content.items.map(item => item.str).join(" ") + " ";
-        }
-        // Tokenize into words/values
-        flat = fullText.split(/\s+/).map(v => v.trim()).filter(Boolean);
-      } else {
-        // ── Excel extraction ───────────────────────────────────────────────
-        const XLSX = await import('xlsx');
-        const buffer = await file.arrayBuffer();
-        const wb = XLSX.read(buffer, { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-        flat = rows.flat().map(v => String(v).trim());
-      }
-
-      // ── Shared fuzzy extraction logic ────────────────────────────────────
-      const findAfterLabel = (labels) => {
-        for (const label of labels) {
-          const labelWords = label.toLowerCase().split(" ");
-          for (let i = 0; i < flat.length - 1; i++) {
-            const window = flat.slice(i, i + labelWords.length).join(" ").toLowerCase();
-            if (window.includes(label.toLowerCase())) {
-              // Scan ahead for first numeric value
-              for (let j = i + 1; j < Math.min(i + 6, flat.length); j++) {
-                const val = String(flat[j]).replace(/[$,()]/g, "").trim();
-                if (val && !isNaN(parseFloat(val)) && parseFloat(val) > 0) return val;
-              }
-            }
-          }
-        }
-        return "";
-      };
-
-      const findText = (labels) => {
-        for (const label of labels) {
-          for (let i = 0; i < flat.length - 1; i++) {
-            if (flat[i].toLowerCase().includes(label.toLowerCase())) {
-              const next = flat[i + 1];
-              if (next && !/^\d/.test(next)) return next;
-            }
-          }
-        }
-        return "";
-      };
-
-      const findRate = () => {
-        // Look for patterns like "$25.00/hr" or "95,000/yr" or "Rate: 45.00"
-        for (let i = 0; i < flat.length; i++) {
-          const v = flat[i].replace(/[$,]/g, "");
-          if (/^\d+(\.\d+)?$/.test(v) && parseFloat(v) > 10) {
-            const ctx = flat.slice(Math.max(0,i-2), i+2).join(" ").toLowerCase();
-            if (ctx.includes("rate") || ctx.includes("/hr") || ctx.includes("hourly") || ctx.includes("salary") || ctx.includes("/yr")) {
-              return v;
-            }
-          }
-        }
-        return "";
-      };
-
-      const fullName = findText(["employee", "name"]);
-      const nameParts = fullName ? fullName.split(" ") : ["", ""];
-      const extractedRate = findRate();
-
-      // Try to find combined income tax (fed+prov together)
-      const combinedTax = findAfterLabel(["income tax (federal", "total income tax", "income tax ytd"]);
-      const fedTax  = findAfterLabel(["ytd federal", "federal tax", "fed tax", "federal income"]);
-      const provTax = findAfterLabel(["ytd provincial", "provincial tax", "prov tax", "provincial income"]);
-
-      // From screenshot: SALARY row has AMOUNT=1462.43, YTD=15915.16
-      // CPP current=82.49 YTD=913.77, EI current=24.79 YTD=272.26
-      // FED.TAX current=164.71 YTD=1915.96
-      // Employer CPP current=82.49 YTD=913.77, Employer EI current=34.71 YTD=381.16
-      // VAC.PAY YTD=636.61, GROSS YTD=16703.54, NET YTD=13601.55
-
-      const ytdBaseEarnings = findAfterLabel(["salary", "base salary", "regular", "amount"]);
-      const ytdGross        = findAfterLabel(["year to date", "ytd gross", "gross pay", "16703", "total gross"]);
-      const ytdCPP          = findAfterLabel(["cpp"]);
-      const ytdEI           = findAfterLabel(["ei"]);
-      const ytdFedTax       = findAfterLabel(["fed.tax", "fed tax", "fedtax", "federal"]);
-      const ytdVac          = findAfterLabel(["vac.pay", "vac pay", "vacation"]);
-      const ytdErCPP        = findAfterLabel(["employer cpp", "er cpp"]);
-      const ytdErEI         = findAfterLabel(["employer ei", "er ei"]);
-      const ytdNet          = findAfterLabel(["net pay", "net"]);
-
+      const data = await extractPaystubData(file);
+      const nameParts = data.fullName ? data.fullName.split(" ") : [];
       setForm(prev => ({
         ...prev,
         firstName:         nameParts[0] || prev.firstName,
         lastName:          nameParts.slice(1).join(" ") || prev.lastName,
-        salary:            extractedRate && parseFloat(extractedRate) > 1000 ? extractedRate : prev.salary,
-        rate:              extractedRate && parseFloat(extractedRate) <= 200  ? extractedRate : prev.rate,
-        ytd_base_earnings: ytdBaseEarnings || prev.ytd_base_earnings,
-        ytd_gross:         ytdGross || prev.ytd_gross,
-        ytd_cpp:           ytdCPP   || prev.ytd_cpp,
-        ytd_ei:            ytdEI    || prev.ytd_ei,
-        ytd_tax:           ytdFedTax || prev.ytd_tax,
-        ytd_fed_tax:       ytdFedTax ? (parseFloat(ytdFedTax)/2).toFixed(2) : prev.ytd_fed_tax,
-        ytd_prov_tax:      ytdFedTax ? (parseFloat(ytdFedTax)/2).toFixed(2) : prev.ytd_prov_tax,
-        ytd_vac:           ytdVac   || prev.ytd_vac,
-        ytd_er_cpp:        ytdErCPP || prev.ytd_er_cpp,
-        ytd_er_ei:         ytdErEI  || prev.ytd_er_ei,
+        type:              data.salary ? "Salary" : (data.rate ? "Hourly" : prev.type),
+        salary:            data.salary || prev.salary,
+        rate:              data.rate || prev.rate,
+        vacRate:           data.vac_rate_pct || prev.vacRate,
+        ytd_base_earnings: data.ytd_base_earnings || prev.ytd_base_earnings,
+        ytd_gross:         data.ytd_gross || prev.ytd_gross,
+        ytd_cpp:           data.ytd_cpp   || prev.ytd_cpp,
+        ytd_ei:            data.ytd_ei    || prev.ytd_ei,
+        ytd_fed_tax:       data.ytd_fed_tax || prev.ytd_fed_tax,
+        ytd_prov_tax:      data.ytd_prov_tax || prev.ytd_prov_tax,
+        ytd_tax:           (data.ytd_fed_tax && data.ytd_prov_tax) ? (parseFloat(data.ytd_fed_tax)+parseFloat(data.ytd_prov_tax)).toFixed(2) : prev.ytd_tax,
+        ytd_vac:           data.ytd_vac   || prev.ytd_vac,
+        ytd_er_cpp:        data.ytd_er_cpp || prev.ytd_er_cpp,
+        ytd_er_ei:         data.ytd_er_ei  || prev.ytd_er_ei,
       }));
+      if (!data.fullName) {
+        setImportError("Could not detect employee name automatically — please fill it in manually.");
+      }
     } catch (err) {
       setImportError("Could not read file. Please ensure it is a valid Excel (.xlsx) or PDF file.");
     }
