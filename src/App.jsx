@@ -2605,6 +2605,9 @@ function HistoryPage({ company }) {
   const [deleteRun, setDeleteRun] = useState(null);
   const [deleteSelected, setDeleteSelected] = useState({});
   const [deleting, setDeleting] = useState(false);
+  const [showClearAll, setShowClearAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState("");
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -2617,6 +2620,22 @@ function HistoryPage({ company }) {
     };
     fetchHistory();
   }, [company.id]);
+
+  const clearAllHistory = async () => {
+    setClearingAll(true);
+    const { error } = await supabase
+      .from('payroll_runs')
+      .delete()
+      .eq('company_id', company.id);
+    if (!error) {
+      setHistory([]);
+    } else {
+      alert("Failed to clear history: " + error.message);
+    }
+    setClearingAll(false);
+    setShowClearAll(false);
+    setClearConfirmText("");
+  };
 
   const openDeleteModal = (run) => {
     setDeleteRun(run);
@@ -2670,7 +2689,12 @@ function HistoryPage({ company }) {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div><h1 className="text-xl font-semibold text-gray-900">Payroll History</h1><p className="text-sm text-gray-400 mt-0.5">{company.name}</p></div>
-        <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"><Download size={15}/> Export CSV</button>
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"><Download size={15}/> Export CSV</button>
+          {history.length > 0 && (
+            <button onClick={() => setShowClearAll(true)} className="flex items-center gap-2 px-4 py-2 border border-red-200 rounded-xl text-sm text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={15}/> Clear History</button>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={DollarSign} label="Total Payroll YTD" value="$218,400" color="blue"/>
@@ -2742,6 +2766,39 @@ function HistoryPage({ company }) {
                 <button onClick={() => setDeleteRun(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50">Cancel</button>
                 <button onClick={confirmDelete} disabled={deleting || !Object.values(deleteSelected).some(Boolean)} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl font-medium">
                   {deleting ? "Deleting..." : "Delete Selected"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showClearAll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:"rgba(0,0,0,0.4)"}}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-red-600">Clear All Payroll History</h2>
+              <button onClick={() => { setShowClearAll(false); setClearConfirmText(""); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"><X size={16}/></button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-700 mb-2">
+                This will permanently delete <span className="font-semibold">all {history.length} payroll run{history.length===1?'':'s'}</span> for <span className="font-semibold">{company.name}</span>, including every paystub and YTD record built from them.
+              </p>
+              <p className="text-xs text-red-500 mb-4">This cannot be undone. Opening YTD balances on employee profiles will NOT be affected — only runs processed in-app will be removed.</p>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Type <span className="font-mono font-semibold">DELETE</span> to confirm</label>
+              <input
+                value={clearConfirmText}
+                onChange={e => setClearConfirmText(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-400 mb-5"
+                placeholder="DELETE"
+              />
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => { setShowClearAll(false); setClearConfirmText(""); }} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50">Cancel</button>
+                <button
+                  onClick={clearAllHistory}
+                  disabled={clearingAll || clearConfirmText !== "DELETE"}
+                  className="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-gray-100 disabled:text-gray-400 text-white rounded-xl font-medium"
+                >
+                  {clearingAll ? "Clearing..." : "Clear All History"}
                 </button>
               </div>
             </div>
