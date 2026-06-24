@@ -2621,6 +2621,33 @@ function HistoryPage({ company }) {
     fetchHistory();
   }, [company.id]);
 
+  const exportToCSV = () => {
+    if (!history.length) {
+      alert("No payroll history to export.");
+      return;
+    }
+    const headers = ["Pay Date","Period","Employees","Gross Payroll","Deductions","Net Payroll","Status"];
+    const rows = history.map(p => [
+      p.pay_date || "",
+      (p.period || "").replace(/,/g, ""),
+      p.employees ?? "",
+      Number(p.gross || 0).toFixed(2),
+      Number(p.deductions || 0).toFixed(2),
+      Number(p.net || 0).toFixed(2),
+      "Completed",
+    ]);
+    const csvContent = [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `payroll-history-${(company.name || "company").replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const clearAllHistory = async () => {
     setClearingAll(true);
     const { error } = await supabase
@@ -2690,7 +2717,7 @@ function HistoryPage({ company }) {
       <div className="flex items-center justify-between">
         <div><h1 className="text-xl font-semibold text-gray-900">Payroll History</h1><p className="text-sm text-gray-400 mt-0.5">{company.name}</p></div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"><Download size={15}/> Export CSV</button>
+          <button onClick={exportToCSV} className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"><Download size={15}/> Export CSV</button>
           {history.length > 0 && (
             <button onClick={() => setShowClearAll(true)} className="flex items-center gap-2 px-4 py-2 border border-red-200 rounded-xl text-sm text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={15}/> Clear History</button>
           )}
