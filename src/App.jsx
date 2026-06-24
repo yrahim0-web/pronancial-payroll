@@ -1182,6 +1182,163 @@ useEffect(() => {
   const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "", ytd_base_earnings: "", ytd_tax: "", ytd_unlock: false, ytd_as_of_period: "" });
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkResults, setBulkResults] = useState([]);
+
+  const extractPaystubData = async (file) => {
+    let flat = [];
+    if (file.name.endsWith('.pdf')) {
+      const pdfjsLib = await import('pdfjs-dist/build/pdf');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+      let fullText = "";
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        fullText += content.items.map(item => item.str).join(" ") + " ";
+      }
+      flat = fullText.split(/\s+/).map(v => v.trim()).filter(Boolean);
+    } else {
+      const XLSX = await import('xlsx');
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      flat = rows.flat().map(v => String(v).trim());
+    }
+
+    const findAfterLabel = (labels) => {
+      for (const label of labels) {
+        const labelWords = label.toLowerCase().split(" ");
+        for (let i = 0; i < flat.length - 1; i++) {
+          const window = flat.slice(i, i + labelWords.length).join(" ").toLowerCase();
+          if (window.includes(label.toLowerCase())) {
+            for (let j = i + 1; j < Math.min(i + 6, flat.length); j++) {
+              const val = String(flat[j]).replace(/[$,()]/g, "").trim();
+              if (val && !isNaN(parseFloat(val)) && parseFloat(val) > 0) return val;
+            }
+          }
+        }
+      }
+      return "";
+    };
+
+    const findText = (labels) => {
+      for (const label of labels) {
+        for (let i = 0; i < flat.length - 1; i++) {
+          if (flat[i].toLowerCase().includes(label.toLowerCase())) {
+            const next = flat[i + 1];
+            if (next && !/^\d/.test(next)) return next;
+          }
+        }
+      }
+      return "";
+    };
+
+    const findRate = () => {
+      for (let i = 0; i < flat.length; i++) {
+        const v = flat[i].replace(/[$,]/g, "");
+        if (/^\d+(\.\d+)?$/.test(v) && parseFloat(v) > 10) {
+          const ctx = flat.slice(Math.max(0,i-2), i+2).join(" ").toLowerCase();
+          if (ctx.includes("rate") || ctx.includes("/hr") || ctx.includes("hourly") || ctx.includes("salary") || ctx.includes("/yr")) {
+            return v;
+          }
+        }
+      }
+      return "";
+    };
+
+    const fullName = findText(["employee", "name"]);
+    const extractedRate = findRate();
+    const ytdFedTax = findAfterLabel(["fed.tax", "fed tax", "fedtax", "federal"]);
+
+    return {
+      fullName: fullName || "",
+      salary: extractedRate && parseFloat(extractedRate) > 1000 ? extractedRate : "",
+      rate: extractedRate && parseFloat(extractedRate) <= 200 ? extractedRate : "",
+      ytd_base_earnings: findAfterLabel(["salary", "base salary", "regular", "amount"]),
+      ytd_gross: findAfterLabel(["year to date", "ytd gross", "gross pay", "total gross"]),
+      ytd_cpp: findAfterLabel(["cpp"]),
+      ytd_ei: findAfterLabel(["ei"]),
+      ytd_fed_tax: ytdFedTax ? (parseFloat(ytdFedTax)/2).toFixed(2) : "",
+      ytd_prov_tax: ytdFedTax ? (parseFloat(ytdFedTax)/2).toFixed(2) : "",
+      ytd_vac: findAfterLabel(["vac.pay", "vac pay", "vacation"]),
+      ytd_er_cpp: findAfterLabel(["employer cpp", "er cpp"]),
+      ytd_er_ei: findAfterLabel(["employer ei", "er ei"]),
+    };
+  };
+
+  const handleBulkPaystubImport = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setBulkImporting(true);
+    setBulkResults([]);
+    const results = [];
+    const normalize = (s) => s.toLowerCase().replace(/\s+/g, " ").trim();
+
+    for (const file of files) {
+      try {
+        const data = await extractPaystubData(file);
+        if (!data.fullName) {
+          results.push({ file: file.name, status: "skipped", reason: "Could not read employee name" });
+          continue;
+        }
+
+        const target = normalize(data.fullName);
+        const match = employees.find(emp => normalize(emp.name) === target);
+
+        if (match) {
+          results.push({ file: file.name, status: "skipped", reason: `Employee "${match.name}" already exists — no changes made` });
+          continue;
+        }
+
+        const ytdPayload = {
+          opening_ytd_base_earnings: parseFloat(data.ytd_base_earnings) || 0,
+          opening_ytd_gross: parseFloat(data.ytd_gross) || 0,
+          opening_ytd_cpp: parseFloat(data.ytd_cpp) || 0,
+          opening_ytd_ei: parseFloat(data.ytd_ei) || 0,
+          opening_ytd_fed_tax: parseFloat(data.ytd_fed_tax) || 0,
+          opening_ytd_prov_tax: parseFloat(data.ytd_prov_tax) || 0,
+          opening_ytd_vac: parseFloat(data.ytd_vac) || 0,
+          opening_ytd_er_cpp: parseFloat(data.ytd_er_cpp) || 0,
+          opening_ytd_er_ei: parseFloat(data.ytd_er_ei) || 0,
+        };
+
+        const rate = data.salary ? parseFloat(data.salary) : (data.rate ? parseFloat(data.rate) : 60000);
+        const type = data.salary ? "Salary" : "Hourly";
+        const { data: inserted, error } = await supabase
+          .from('employees')
+          .insert([{
+            company_id: company.id,
+            name: data.fullName,
+            position: "Employee",
+            province: "ON",
+            type,
+            rate,
+            status: "active",
+            sin: "***-***-000",
+            td1_fed: 16452,
+            payroll_schedule: "Semi-monthly",
+            vac_rate: "4%",
+            ...ytdPayload,
+            ytd_gross: 0, ytd_cpp: 0, ytd_ei: 0, ytd_fed_tax: 0, ytd_prov_tax: 0,
+            ytd_vac: 0, ytd_er_cpp: 0, ytd_er_ei: 0, ytd_base_earnings: 0,
+          }])
+          .select()
+          .single();
+        if (error) throw error;
+        setEmployees(prev => [...prev, inserted]);
+        results.push({ file: file.name, status: "added", name: data.fullName });
+      } catch (err) {
+        results.push({ file: file.name, status: "error", reason: err.message });
+      }
+    }
+
+    setBulkResults(results);
+    setBulkImporting(false);
+    e.target.value = "";
+  };
 
   const handlePaystubImport = async (e) => {
     const file = e.target.files[0];
@@ -1409,6 +1566,26 @@ useEffect(() => {
         <StatCard icon={CheckCircle2} label="Active" value={employees.filter(e=>e.status==="active").length} color="green" />
         <StatCard icon={Briefcase} label="Salaried" value={employees.filter(e=>e.type==="Salary").length} color="blue" />
         <StatCard icon={Clock} label="Hourly" value={employees.filter(e=>e.type==="Hourly").length} color="amber" />
+      </div>
+      <div className="border border-dashed border-emerald-300 bg-emerald-50 rounded-2xl p-4">
+        <p className="text-xs font-semibold text-emerald-700 mb-1">📂 Bulk Import New Employees from Paystubs</p>
+        <p className="text-xs text-emerald-600 mb-2">Use this only for onboarding new employees for the first time. Select all paystub PDF/Excel files from a pay period folder — any name that already exists in your employee list is skipped automatically and left untouched.</p>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <span className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 transition-colors">{bulkImporting ? "Processing..." : "Choose Files"}</span>
+          <input type="file" accept=".xlsx,.xls,.pdf" multiple className="hidden" onChange={handleBulkPaystubImport} disabled={bulkImporting} />
+          <span className="text-xs text-emerald-500">Supports multiple .xlsx, .xls, .pdf at once</span>
+        </label>
+        {bulkResults.length > 0 && (
+          <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
+            {bulkResults.map((r, i) => (
+              <div key={i} className={`text-xs px-2 py-1 rounded-lg ${r.status==="error"?"bg-red-50 text-red-600":r.status==="skipped"?"bg-amber-50 text-amber-700":"bg-white text-emerald-700"}`}>
+                {r.status === "added" && `✅ Added new employee: ${r.name} (${r.file})`}
+                {r.status === "skipped" && `⏭️ Skipped ${r.file}: ${r.reason}`}
+                {r.status === "error" && `❌ Error on ${r.file}: ${r.reason}`}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <Card>
         <div className="p-4 border-b border-gray-50 flex items-center gap-3">
