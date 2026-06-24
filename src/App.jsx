@@ -272,7 +272,7 @@ function calcPayroll(
   const baseEarnings         = +regularPay.toFixed(2);                       // "Base Pay" = reg hrs × rate ONLY
   const vacationableEarnings = +(regularPay + otPay).toFixed(2);             // regular + OT — used only for vacation pay calc
   const employmentEarnings   = +(regularPay + otPay + statPay + bon).toFixed(2);
-  const vacPay                = +((vacationableEarnings / (1 - vacRate)) * vacRate).toFixed(2);
+  const vacPay                = +(vacationableEarnings * vacRate).toFixed(2);
   const grossPeriod           = +(employmentEarnings + vacPay).toFixed(2);
 
   // ── Step 2: CPP (T4127 Section A) ───────────────────────────────────────────
@@ -335,7 +335,7 @@ function calcPayroll(
   const K3 = 0.14 * annualEI;
   // CEA applies to employment income only (base earnings × PP, not including vac pay)
   const annualBaseOnly = baseEarnings * PP;
-  const K4 = 0.14 * Math.min(annualBaseOnly, 1433);
+  const K4 = 0.14 * Math.min(annualBaseOnly, 1500);
   const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
   const annualFedTax    = Math.round(annualFedTaxRaw);
   const periodFedTax    = +(annualFedTax / PP).toFixed(2);
