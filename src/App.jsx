@@ -1260,6 +1260,28 @@ useEffect(() => {
 
     // YEAR TO DATE summary row (gross, deductions, net)
     const ytdLabelIdx = findIdx(/^date$/i);
+    const ytdSummary = ytdLabelIdx > -1 ? numbersAfter(ytdLabelIdx, 3) : [];
+    const ytdGross = ytdSummary[0];
+
+    return {
+      fullName: fullNameFromPdf || "",
+      salary: rate && rate > 1000 ? String(rate) : "",
+      rate: rate && rate <= 200 ? String(rate) : "",
+      ytd_base_earnings: ytdBase ? String(ytdBase) : "",
+      ytd_gross: ytdGross !== undefined ? String(ytdGross) : "",
+      ytd_cpp: cppYtd ? String(cppYtd) : "",
+      ytd_ei: eiYtd ? String(eiYtd) : "",
+      // Paystub only shows one combined income-tax figure (no fed/prov split),
+      // so the full amount goes into fed_tax and prov_tax stays 0 — avoids a
+      // fake 50/50 guess while keeping the total accurate for reports.
+      ytd_fed_tax: fedYtd ? String(fedYtd) : "",
+      ytd_prov_tax: "0",
+      ytd_vac: vacYtd ? String(vacYtd) : "",
+      ytd_er_cpp: erCppYtd ? String(erCppYtd) : "",
+      ytd_er_ei: erEiYtd ? String(erEiYtd) : "",
+      vac_rate_pct: vacRate ? String(vacRate) : "",
+    };
+  };
 
   const handleBulkPaystubImport = async (e) => {
     const files = Array.from(e.target.files || []);
