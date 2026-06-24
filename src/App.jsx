@@ -73,7 +73,7 @@ const CPP2_MAX        = 416.00;   // CPP2 max annual 2026
 const CPP2_THRESHOLD  = 74600.00; // YMPE 2026
 
 // EI 2026
-const EI_RATE         = 0.0163;
+const EI_RATE         = 0.01630;
 const EI_MAX_CONTRIB  = 1123.07;  // employee max annual 2026 (MIE $68,900 × 1.63%)
 const EI_MAX_INSURABLE = 68900;   // 2026 Maximum Insurable Earnings
 
@@ -272,13 +272,13 @@ function calcPayroll(
   const baseEarnings         = +regularPay.toFixed(2);                       // "Base Pay" = reg hrs × rate ONLY
   const vacationableEarnings = +(regularPay + otPay).toFixed(2);             // regular + OT — used only for vacation pay calc
   const employmentEarnings   = +(regularPay + otPay + statPay + bon).toFixed(2);
-  const vacPay                = +(vacationableEarnings * vacRate).toFixed(2);
+  const vacPay                = +((vacationableEarnings / (1 - vacRate)) * vacRate).toFixed(2);
   const grossPeriod           = +(employmentEarnings + vacPay).toFixed(2);
 
   // ── Step 2: CPP (T4127 Section A) ───────────────────────────────────────────
   // Actual deduction this period — capped by REMAINING ROOM vs YTD already withheld.
   const periodExemption   = CPP_EXEMPTION / PP; // keep full precision, no rounding
-  const periodPensionable = Math.max(grossPeriod - periodExemption, 0);
+  const periodPensionable = Math.max(+(grossPeriod - periodExemption).toFixed(2), 0);
   const cppRoomLeft       = Math.max(CPP_MAX_CONTRIB - ytdCppSoFar, 0);
   const periodCPP         = +Math.min(periodPensionable * CPP_RATE, cppRoomLeft).toFixed(2);
   // Annualized ESTIMATE for the K2 tax credit (T4127 Method 1) — based on this
@@ -335,7 +335,7 @@ function calcPayroll(
   const K3 = 0.14 * annualEI;
   // CEA applies to employment income only (base earnings × PP, not including vac pay)
   const annualBaseOnly = baseEarnings * PP;
-  const K4 = 0.14 * Math.min(annualBaseOnly, 1501);
+  const K4 = 0.14 * Math.min(annualBaseOnly, 1433);
   const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
   const annualFedTax    = Math.round(annualFedTaxRaw);
   const periodFedTax    = +(annualFedTax / PP).toFixed(2);
