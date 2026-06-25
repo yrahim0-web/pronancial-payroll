@@ -2072,7 +2072,7 @@ function RunPayrollPage({ company, setPage }) {
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="text-xs font-medium text-gray-400 uppercase tracking-wider border-b border-gray-50">
-              {["","Employee","Reg Hrs","OT Hrs (1.5×)","Stat Pay ($)","Bonus","Vac %","Base Pay","OT Pay","Vac Pay","Gross","CPP","EI","Tax","Net Pay"].map(h=>(
+              {["","Employee","Reg Hrs","OT Hrs (1.5×)","Stat Pay ($)","Bonus","Vac %","Base Pay","OT Pay","Vac Pay","Gross","CPP","EI","Fed Tax","Prov Tax","Tax","Net Pay"].map(h=>(
                 <th key={h} className="text-left px-3 py-3 whitespace-nowrap">{h}</th>
               ))}
             </tr></thead>
@@ -2150,6 +2150,8 @@ function RunPayrollPage({ company, setPage }) {
                   <td className="px-3 py-3 font-semibold text-gray-900">${e.gross.toFixed(2)}</td>
                   <td className="px-3 py-3 text-red-500">${e.cpp.toFixed(2)}</td>
                   <td className="px-3 py-3 text-red-500">${e.ei.toFixed(2)}</td>
+                  <td className="px-3 py-3 text-orange-500">${e.fedTax.toFixed(2)}</td>
+                  <td className="px-3 py-3 text-pink-500">${e.provTax.toFixed(2)}</td>
                   <td className="px-3 py-3 text-red-500">${e.tax.toFixed(2)}</td>
                   <td className="px-3 py-3 font-semibold text-emerald-700">${e.net.toFixed(2)}</td>
                 </tr>
@@ -2163,6 +2165,8 @@ function RunPayrollPage({ company, setPage }) {
               <td className="px-3 py-3 text-gray-900">${totals.gross.toFixed(2)}</td>
               <td className="px-3 py-3 text-red-500">${totals.cpp.toFixed(2)}</td>
               <td className="px-3 py-3 text-red-500">${totals.ei.toFixed(2)}</td>
+              <td className="px-3 py-3 text-orange-500">${rows.reduce((a,r)=>a+(r.fedTax||0),0).toFixed(2)}</td>
+              <td className="px-3 py-3 text-pink-500">${rows.reduce((a,r)=>a+(r.provTax||0),0).toFixed(2)}</td>
               <td className="px-3 py-3 text-red-500">${totals.tax.toFixed(2)}</td>
               <td className="px-3 py-3 text-emerald-700">${totals.net.toFixed(2)}</td>
             </tr></tfoot>
