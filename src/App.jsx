@@ -2646,6 +2646,447 @@ function PaystubsPage({ company }) {
     setExportingExcel(emp.id);
     try {
       const ExcelJS = (await import('exceljs')).default;
+      const wb = new ExcelJS.Workbook();
+
+      // ── CONSTANTS SHEET ──────────────────────────────────────────────────────
+      const cs = wb.addWorksheet('CRA_Constants');
+      cs.getColumn('A').width = 32; cs.getColumn('B').width = 18; cs.getColumn('C').width = 32;
+      const cRows = [
+        ['CRA 2026 Payroll Constants','',''],
+        ['','',''],
+        ['CPP Rate',0.0595,'5.95%'],
+        ['CPP Base Rate',0.0495,'4.95%'],
+        ['CPP Max Contribution',4230.45,'Annual employee max'],
+        ['CPP Exemption',3500,'Annual basic exemption'],
+        ['CPP2 Rate',0.04,'4%'],
+        ['CPP2 Max',416,'Annual max'],
+        ['CPP2 Threshold',74600,'YMPE 2026'],
+        ['EI Rate',0.01630,'1.63%'],
+        ['EI Max Contribution',1123.07,'Annual employee max'],
+        ['Federal BPA',16452,'Basic Personal Amount 2026'],
+        ['Federal Credit Rate',0.14,'14%'],
+        ['CEA Limit',1433,'Canada Employment Amount'],
+        ['ON BPA',12989,'Ontario Basic Personal Amount'],
+        ['ON Lowest Rate',0.0505,'5.05%'],
+        ['Pay Periods',26,'Bi-weekly'],
+        ['Vac Rate',parseFloat(String(emp.vac_rate||'4%').replace('%',''))/100,'Vacation %'],
+        ['Hourly Rate',emp.rate,'$/hr'],
+        ['Employee Type',emp.type,'Salary or Hourly'],
+      ];
+      cRows.forEach((r,i) => {
+        const row = cs.getRow(i+1);
+        row.getCell(1).value = r[0];
+        row.getCell(2).value = r[1];
+        row.getCell(3).value = r[2];
+        if (i===0) row.getCell(1).font = {bold:true,size:12};
+      });
+      // Named references (B column): B3=CPP_RATE, B4=CPP_BASE, B5=CPP_MAX, B6=CPP_EXEMPT,
+      // B7=CPP2_RATE, B8=CPP2_MAX, B9=CPP2_THRESH, B10=EI_RATE, B11=EI_MAX,
+      // B12=FED_BPA, B13=FED_CR, B14=CEA, B15=ON_BPA, B16=ON_LOW, B17=PP, B18=VAC, B19=RATE
+
+      // ── DATA SHEET ───────────────────────────────────────────────────────────
+      const freq = emp.payroll_schedule || 'Bi-weekly';
+      const periods = getPeriodList(freq);
+      const { data: allRuns } = await supabase
+        .from('payroll_runs').select('period,details').eq('company_id', emp.company_id);
+      const byPeriod = {};
+      (allRuns||[]).forEach(run => {
+        const m = (run.period||'').match(/Period\s+(\d+)/i);
+        if (!m) return;
+        const d = (run.details||[]).find(x => x.employee_id === emp.id);
+        if (d) byPeriod[+m[1]] = d;
+      });
+
+      const ds = wb.addWorksheet('PayrollData');
+      ds.getColumn('A').width = 8;  // Period#
+      ds.getColumn('B').width = 16; // Period Start
+      ds.getColumn('C').width = 16; // Period End
+      ds.getColumn('D').width = 12; // Pay Date
+      ds.getColumn('E').width = 12; // Reg Hours (INPUT)
+      ds.getColumn('F').width = 12; // Stat Pay $ (INPUT)
+      ds.getColumn('G').width = 14; // Base Pay (formula)
+      ds.getColumn('H').width = 12; // Vac Pay (formula)
+      ds.getColumn('I').width = 12; // Gross (formula)
+      ds.getColumn('J').width = 12; // CPP (formula)
+      ds.getColumn('K').width = 12; // EI (formula)
+      ds.getColumn('L').width = 14; // Fed Tax (formula)
+      ds.getColumn('M').width = 14; // Prov Tax (formula)
+      ds.getColumn('N').width = 12; // Net (formula)
+      ds.getColumn('O').width = 14; // YTD Gross
+      ds.getColumn('P').width = 14; // YTD CPP
+      ds.getColumn('Q').width = 14; // YTD EI
+      ds.getColumn('R').width = 14; // YTD Fed
+      ds.getColumn('S').width = 14; // YTD Prov
+      ds.getColumn('T').width = 14; // YTD Vac
+      ds.getColumn('U').width = 14; // ER CPP
+      ds.getColumn('V').width = 14; // ER EI
+
+      // Header row
+      const hdr = ['Period#','Start','End','PayDate','Reg Hrs (Input)','Stat Pay $ (Input)',
+        'Base Pay','Vac Pay','Gross','CPP','EI','Fed Tax','Prov Tax','Net',
+        'YTD Gross','YTD CPP','YTD EI','YTD Fed','YTD Prov','YTD Vac','ER CPP','ER EI'];
+      const h1 = ds.getRow(1);
+      hdr.forEach((v,i) => {
+        h1.getCell(i+1).value = v;
+        h1.getCell(i+1).font = {bold:true};
+        h1.getCell(i+1).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FF404040'}};
+        h1.getCell(i+1).font = {bold:true,color:{argb:'FFFFFFFF'}};
+      });
+
+      // Opening balances row (row 2) — from employee record
+      const openRow = ds.getRow(2);
+      openRow.getCell(1).value = 'Opening';
+      // Opening YTD balances (static from DB)
+      openRow.getCell(15).value = +(emp.opening_ytd_gross||0);
+      openRow.getCell(16).value = +(emp.opening_ytd_cpp||0);
+      openRow.getCell(17).value = +(emp.opening_ytd_ei||0);
+      openRow.getCell(18).value = +(emp.opening_ytd_fed_tax||0);
+      openRow.getCell(19).value = +(emp.opening_ytd_prov_tax||0);
+      openRow.getCell(20).value = +(emp.opening_ytd_vac||0);
+      openRow.getCell(21).value = +(emp.opening_ytd_er_cpp||0);
+      openRow.getCell(22).value = +(emp.opening_ytd_er_ei||0);
+      openRow.eachCell(c => { c.fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFE0B2'}}; });
+
+      // C$ references to Constants sheet
+      const C = (row) => `CRA_Constants!$B$${row}`;
+      // CPP_RATE=B3, CPP_BASE=B4, CPP_MAX=B5, CPP_EXEMPT=B6, CPP2_RATE=B7, CPP2_MAX=B8
+      // CPP2_THRESH=B9, EI_RATE=B10, EI_MAX=B11, FED_BPA=B12, FED_CR=B13, CEA=B14
+      // ON_BPA=B15, ON_LOW=B16, PP=B17, VAC=B18, RATE=B19
+
+      const isSal = emp.type === 'Salary';
+
+      periods.forEach((p, idx) => {
+        const r = idx + 3; // data rows start at row 3
+        const det = byPeriod[p.period];
+        const dataRow = ds.getRow(r);
+
+        // Static period info
+        dataRow.getCell(1).value = p.period;
+        dataRow.getCell(2).value = p.start;
+        dataRow.getCell(3).value = p.end;
+        dataRow.getCell(4).value = p.payDate;
+
+        // INPUT cells (E=RegHrs, F=StatPay) — yellow, pre-filled from actual data
+        const regHrs = det ? +(det.reg_hrs||0) : (isSal ? 88 : 0);
+        const statAmt = det ? +(det.stat_pay||0) : 0;
+        dataRow.getCell(5).value = regHrs; // Reg Hrs
+        dataRow.getCell(5).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF99'}};
+        dataRow.getCell(5).font = {color:{argb:'FF0000FF'}};
+        dataRow.getCell(6).value = statAmt; // Stat Pay $
+        dataRow.getCell(6).fill = {type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF99'}};
+        dataRow.getCell(6).font = {color:{argb:'FF0000FF'}};
+
+        // G = Base Pay
+        if (isSal) {
+          dataRow.getCell(7).value = {formula: `${C(19)}/${C(17)}`}; // rate/PP
+        } else {
+          dataRow.getCell(7).value = {formula: `E${r}*${C(19)}`}; // hrs * rate
+        }
+
+        // H = Vac Pay = BasePay * VacRate
+        dataRow.getCell(8).value = {formula: `G${r}*${C(18)}`};
+
+        // I = Gross = Base + Stat + Vac
+        dataRow.getCell(9).value = {formula: `G${r}+F${r}+H${r}`};
+
+        // J = CPP = MAX(0, MIN((Gross - CPP_EXEMPT/PP) * CPP_RATE, CPP_MAX/PP))
+        // But also must not exceed remaining annual room — we simplify to period calc
+        dataRow.getCell(10).value = {formula:
+          `ROUND(MAX(0,MIN((I${r}-${C(6)}/${C(17)})*${C(3)},${C(5)}/${C(17)})),2)`
+        };
+
+        // K = EI = MIN(Gross * EI_RATE, EI_MAX/PP)
+        dataRow.getCell(11).value = {formula:
+          `ROUND(MIN(I${r}*${C(10)},${C(11)}/${C(17)}),2)`
+        };
+
+        // L = Federal Tax
+        // Annualized: annGross = Gross*PP
+        // T1 = bracket tax on annGross (simplified: first two brackets)
+        // K1 = 0.14*BPA, K2 = 0.14*annCPP, K3 = 0.14*annEI, K4 = 0.14*MIN(BasePay*PP, CEA)
+        // annFed = MAX(T1 - K1 - K2 - K3 - K4, 0) / PP
+        dataRow.getCell(12).value = {formula:
+          `ROUND(MAX(0,` +
+          // T1: bracket tax on annualized gross
+          `IF(I${r}*${C(17)}<=58523,I${r}*${C(17)}*0.14,` +
+          `IF(I${r}*${C(17)}<=117045,8193.22+(I${r}*${C(17)}-58523)*0.205,` +
+          `IF(I${r}*${C(17)}<=181440,20189.5+(I${r}*${C(17)}-117045)*0.26,` +
+          `IF(I${r}*${C(17)}<=258482,36927.9+(I${r}*${C(17)}-181440)*0.29,` +
+          `59249.28+(I${r}*${C(17)}-258482)*0.33))))` +
+          // -K1
+          `-${C(13)}*${C(12)}` +
+          // -K2 (CPP credit = 0.14 * annCPP; annCPP=MIN(J*PP, CPP_MAX))
+          `-${C(13)}*MIN(J${r}*${C(17)},${C(5)})` +
+          // -K3 (EI credit = 0.14 * annEI; annEI=MIN(K*PP, EI_MAX))
+          `-${C(13)}*MIN(K${r}*${C(17)},${C(11)})` +
+          // -K4 (CEA = 0.14 * MIN(BasePay*PP, 1433))
+          `-${C(13)}*MIN(G${r}*${C(17)},${C(14)})` +
+          `)/${C(17)},2)`
+        };
+
+        // M = Provincial Tax (ON)
+        // annGross * ON brackets - ON credits + OHP
+        dataRow.getCell(13).value = {formula:
+          `ROUND(MAX(0,` +
+          // ON bracket tax
+          `IF(I${r}*${C(17)}<=53891,I${r}*${C(17)}*0.0505,` +
+          `IF(I${r}*${C(17)}<=107785,2721.5+(I${r}*${C(17)}-53891)*0.0915,` +
+          `IF(I${r}*${C(17)}<=150000,7652.8+(I${r}*${C(17)}-107785)*0.1116,` +
+          `IF(I${r}*${C(17)}<=220000,12363.99+(I${r}*${C(17)}-150000)*0.1216,` +
+          `20875.99+(I${r}*${C(17)}-220000)*0.1316))))` +
+          // -ON credits = (ON_BPA + annCPP + annEI) * ON_LOW_RATE
+          `-${C(16)}*(${C(15)}+MIN(J${r}*${C(17)},${C(5)})+MIN(K${r}*${C(17)},${C(11)}))` +
+          `)/${C(17)}` +
+          // +OHP per period (simplified flat tiers)
+          `+IF(I${r}*${C(17)}<=20000,0,` +
+          `IF(I${r}*${C(17)}<=36000,MIN(300,0.06*(I${r}*${C(17)}-20000)),` +
+          `IF(I${r}*${C(17)}<=48000,MIN(450,300+0.06*(I${r}*${C(17)}-36000)),` +
+          `IF(I${r}*${C(17)}<=72000,MIN(600,450+0.06*(I${r}*${C(17)}-48000)),` +
+          `IF(I${r}*${C(17)}<=200000,MIN(900,600+0.06*(I${r}*${C(17)}-72000)),900` +
+          `))))/${C(17)},2)`
+        };
+
+        // N = Net = Gross - CPP - EI - FedTax - ProvTax
+        dataRow.getCell(14).value = {formula: `I${r}-J${r}-K${r}-L${r}-M${r}`};
+
+        // YTD columns — chain from prior row
+        const prevR = r - 1; // row 2 = opening balances
+        // O = YTD Gross
+        dataRow.getCell(15).value = {formula: `O${prevR}+I${r}`};
+        // P = YTD CPP
+        dataRow.getCell(16).value = {formula: `P${prevR}+J${r}`};
+        // Q = YTD EI
+        dataRow.getCell(17).value = {formula: `Q${prevR}+K${r}`};
+        // R = YTD Fed
+        dataRow.getCell(18).value = {formula: `R${prevR}+L${r}`};
+        // S = YTD Prov
+        dataRow.getCell(19).value = {formula: `S${prevR}+M${r}`};
+        // T = YTD Vac
+        dataRow.getCell(20).value = {formula: `T${prevR}+H${r}`};
+        // U = ER CPP (employer matches employee)
+        dataRow.getCell(21).value = {formula: `J${r}`};
+        // V = ER EI (1.4x employee EI)
+        dataRow.getCell(22).value = {formula: `K${r}*1.4`};
+
+        // Number formats
+        for (let c=7; c<=22; c++) {
+          dataRow.getCell(c).numFmt = '#,##0.00';
+        }
+      });
+
+      // ── PER-PERIOD PAYSTUB SHEETS ────────────────────────────────────────────
+      const DGREY='FF595959', MGREY='FF808080', LGREY='FFC0C0C0';
+      const BLUE='FF6495ED', WHITE='FFFFFFFF', BLACK='FF000000', TEAL='FF008080';
+      const YELL='FFFFFF99', LGRN='FF90EE90', ORANGE='FFFF8C00';
+
+      const fl = (a) => ({type:'pattern',pattern:'solid',fgColor:{argb:a}});
+      const bd = () => ({
+        top:{style:'thin',color:{argb:'FF808080'}},
+        bottom:{style:'thin',color:{argb:'FF808080'}},
+        left:{style:'thin',color:{argb:'FF808080'}},
+        right:{style:'thin',color:{argb:'FF808080'}},
+      });
+      const sc = (ws, addr, val, fillA, fontColor, bold, alignH, numFmt) => {
+        const c = typeof addr==='string' ? ws.getCell(addr) : addr;
+        if (val !== undefined) c.value = val;
+        if (fillA) c.fill = fl(fillA);
+        c.font = {name:'Calibri',size:9,bold:!!bold,color:{argb:fontColor||BLACK}};
+        c.alignment = {horizontal:alignH||'left',vertical:'middle'};
+        c.border = bd();
+        if (numFmt) c.numFmt = numFmt;
+        return c;
+      };
+
+      periods.forEach((p, idx) => {
+        const dataR = idx + 3; // row in PayrollData for this period
+        const DR = `PayrollData!`; // reference prefix
+        const sn = `P${p.period} ${p.start}`.replace(/[:\\/?*\[\]]/g,'').slice(0,31);
+        const ws = wb.addWorksheet(sn);
+
+        ws.columns = [
+          {width:13},{width:9},{width:9},{width:11},{width:14},
+          {width:13},{width:12},{width:13},{width:10},{width:12},{width:13},
+        ];
+        ws.getRow(1).height = 16;
+        ws.getRow(3).height = 14;
+        ws.getRow(4).height = 14;
+        for (let r=5; r<=21; r++) ws.getRow(r).height = 14;
+        ws.getRow(22).height = 6;
+        ws.getRow(23).height = 14; ws.getRow(24).height = 14;
+        ws.getRow(25).height = 14; ws.getRow(26).height = 14;
+        ws.getRow(27).height = 14; ws.getRow(28).height = 14;
+        ws.getRow(29).height = 6; ws.getRow(30).height = 14;
+
+        // ROW 1: Name + header
+        sc(ws,'A1',(emp.name||'').toUpperCase(),null,BLACK,true,'left');
+        sc(ws,'C1','Employee #0001',null,BLACK,false,'left');
+        sc(ws,'F1','Department#02',null,BLACK,false,'left');
+        sc(ws,'G1','Period Start',null,BLACK,false,'left');
+        sc(ws,'H1',p.start,null,BLACK,false,'left');
+        sc(ws,'J1','Pay Day',null,BLACK,false,'left');
+        sc(ws,'K1',p.payDate,null,BLACK,true,'left');
+
+        // ROW 2
+        sc(ws,'A2','SIN',null,BLACK,false,'left');
+        sc(ws,'B2',emp.sin||'5*******0',null,BLACK,false,'left');
+        sc(ws,'G2','Period End',null,BLACK,false,'left');
+        sc(ws,'H2',p.end,null,BLACK,false,'left');
+
+        // ROW 3: Section headers
+        ['A','B','C','D','E'].forEach(col => sc(ws,`${col}3`,'',DGREY,WHITE,false,'center'));
+        sc(ws,'A3','Statement of Earnings',DGREY,WHITE,true,'center');
+        ['F','G','H'].forEach(col => sc(ws,`${col}3`,'',DGREY,WHITE,false,'center'));
+        sc(ws,'F3','Employee Deductions',DGREY,WHITE,true,'center');
+        ['I','J','K'].forEach(col => sc(ws,`${col}3`,'',DGREY,WHITE,false,'center'));
+        sc(ws,'I3','Employer Contributions',DGREY,WHITE,true,'center');
+
+        // ROW 4: Column headers
+        sc(ws,'A4','',MGREY,WHITE,true,'center');
+        sc(ws,'B4','HOURS',MGREY,WHITE,true,'center');
+        sc(ws,'C4','RATE',MGREY,WHITE,true,'center');
+        sc(ws,'D4','AMOUNT',MGREY,WHITE,true,'center');
+        sc(ws,'E4','Y.T.D',MGREY,WHITE,true,'center');
+        sc(ws,'F4','TYPE',MGREY,WHITE,true,'center');
+        sc(ws,'G4','CURRENT',MGREY,WHITE,true,'center');
+        sc(ws,'H4','Y.T.D',MGREY,WHITE,true,'center');
+        sc(ws,'I4','TYPE',MGREY,WHITE,true,'center');
+        sc(ws,'J4','CURRENT',MGREY,WHITE,true,'center');
+        sc(ws,'K4','Y.T.D',MGREY,WHITE,true,'center');
+
+        // ROW 5: SALARY/REGULAR
+        sc(ws,'A5',isSal?'SALARY':'REGULAR',null,BLACK,false,'left');
+        // Hours input — link to PayrollData
+        const hrsCell = ws.getCell('B5');
+        hrsCell.value = {formula:`${DR}E${dataR}`};
+        hrsCell.fill = fl(YELL); hrsCell.font={name:'Calibri',size:9,color:{argb:'FF0000FF'}};
+        hrsCell.alignment={horizontal:'right',vertical:'middle'}; hrsCell.border=bd();
+        hrsCell.numFmt='#,##0.00';
+        sc(ws,'C5',`$${Number(emp.rate||0).toFixed(2)}`,null,BLACK,false,'right');
+        // Amount = Base Pay from data sheet
+        sc(ws,'D5',{formula:`${DR}G${dataR}`},null,BLACK,false,'right','#,##0.00');
+        // YTD Base = YTD Gross - YTD Vac (approximation) or just YTD gross
+        const ytdBaseCell = ws.getCell('E5');
+        ytdBaseCell.value = {formula:`${DR}O${dataR}-${DR}T${dataR}`};
+        ytdBaseCell.fill=fl(LGRN); ytdBaseCell.font={name:'Calibri',size:9,color:{argb:BLACK}};
+        ytdBaseCell.alignment={horizontal:'right',vertical:'middle'}; ytdBaseCell.border=bd();
+        ytdBaseCell.numFmt='#,##0.00';
+        sc(ws,'F5','FED.TAX',null,BLACK,false,'left');
+        sc(ws,'G5',{formula:`${DR}L${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'H5',{formula:`${DR}R${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'I5','',null,BLACK,false,'left');
+        sc(ws,'J5',0,null,BLACK,false,'right','#,##0.00');
+        sc(ws,'K5',0,null,BLACK,false,'right','#,##0.00');
+
+        // ROW 6: SICK HRS + CPP
+        sc(ws,'A6','SICK HRS',null,BLACK,false,'left');
+        sc(ws,'B6','',null,BLACK,false,'right');
+        sc(ws,'C6','',null,BLACK,false,'right');
+        sc(ws,'D6',0,null,BLACK,false,'right','#,##0.00');
+        const ytd6=ws.getCell('E6'); ytd6.value=0; ytd6.fill=fl(LGRN);
+        ytd6.font={name:'Calibri',size:9}; ytd6.alignment={horizontal:'right',vertical:'middle'};
+        ytd6.border=bd(); ytd6.numFmt='#,##0.00';
+        sc(ws,'F6','CPP',null,BLACK,false,'left');
+        sc(ws,'G6',{formula:`${DR}J${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'H6',{formula:`${DR}P${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'I6','CPP',null,BLACK,false,'left');
+        sc(ws,'J6',{formula:`${DR}U${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'K6',{formula:`${DR}P${dataR}`},null,BLACK,false,'right','#,##0.00');
+
+        // ROW 7: STAT + EI
+        const a7=ws.getCell('A7'); a7.value='STAT';
+        a7.font={name:'Calibri',size:9,color:{argb:TEAL}}; a7.alignment={horizontal:'left',vertical:'middle'}; a7.border=bd();
+        sc(ws,'B7','',null,BLACK,false,'right');
+        sc(ws,'C7','',null,BLACK,false,'right');
+        sc(ws,'D7',{formula:`${DR}F${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'E7',0,null,BLACK,false,'right','#,##0.00');
+        sc(ws,'F7','EI',null,BLACK,false,'left');
+        sc(ws,'G7',{formula:`${DR}K${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'H7',{formula:`${DR}Q${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'I7','EI',null,BLACK,false,'left');
+        sc(ws,'J7',{formula:`${DR}V${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'K7',{formula:`${DR}Q${dataR}*1.4`},null,BLACK,false,'right','#,##0.00');
+
+        // ROW 8: VAC.PAY + PROV.TAX
+        sc(ws,'A8','VAC.PAY',null,BLACK,false,'left');
+        const b8=ws.getCell('B8'); b8.value='0.0'; b8.fill=fl(YELL);
+        b8.font={name:'Calibri',size:9}; b8.alignment={horizontal:'right',vertical:'middle'}; b8.border=bd();
+        sc(ws,'C8',`${Math.round(parseFloat(String(emp.vac_rate||'4%').replace('%','')))}%`,null,BLACK,false,'right');
+        sc(ws,'D8',{formula:`${DR}H${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'E8',{formula:`${DR}T${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'F8','PROV.TAX',null,BLACK,false,'left');
+        sc(ws,'G8',{formula:`${DR}M${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'H8',{formula:`${DR}S${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'I8','',null,BLACK,false,'left');
+        sc(ws,'J8','',null,BLACK,false,'right');
+        sc(ws,'K8','',null,BLACK,false,'right');
+
+        // ROWS 9-20: empty
+        for (let r=9;r<=20;r++) {
+          ['A','B','C','D','E','F','G','H','I','J','K'].forEach(col=>{
+            ws.getCell(`${col}${r}`).value='';
+            ws.getCell(`${col}${r}`).border=bd();
+          });
+        }
+
+        // ROW 22-23: SUMMARY headers
+        ['A','B','C','D','E','F','G','H','I','J','K'].forEach(col=>{
+          sc(ws,`${col}22`,'',DGREY,WHITE,false,'center');
+          sc(ws,`${col}23`,'',DGREY,WHITE,false,'center');
+        });
+        sc(ws,'A22','SUMMARY',DGREY,WHITE,true,'center');
+        sc(ws,'B22','GROSS',DGREY,WHITE,true,'center');
+        sc(ws,'B23','PAY',DGREY,WHITE,true,'center');
+        sc(ws,'C22','DEDUCTIONS',DGREY,WHITE,true,'center');
+        sc(ws,'D22','NET PAY',BLUE,WHITE,true,'center');
+        sc(ws,'E22','NET PAY ALLOCATION',DGREY,WHITE,true,'center');
+
+        // ROW 24-25: CURRENT
+        ['A','B','C','D','E','F','G','H','I','J','K'].forEach(col=>{
+          sc(ws,`${col}24`,'',LGREY,BLACK,false,'right');
+          sc(ws,`${col}25`,'',LGREY,BLACK,false,'right');
+        });
+        sc(ws,'A24','CURRENT',LGREY,BLACK,true,'center');
+        sc(ws,'A25','',LGREY,BLACK,false,'center');
+        sc(ws,'B24',{formula:`${DR}I${dataR}`},null,BLACK,false,'right','#,##0.00');
+        // Deductions = CPP + EI + FedTax + ProvTax
+        sc(ws,'C24',{formula:`${DR}J${dataR}+${DR}K${dataR}+${DR}L${dataR}+${DR}M${dataR}`},null,BLACK,false,'right','#,##0.00');
+        const netCell24=ws.getCell('D24');
+        netCell24.value={formula:`${DR}N${dataR}`};
+        netCell24.font={name:'Calibri',size:10,bold:true,color:{argb:ORANGE}};
+        netCell24.alignment={horizontal:'right',vertical:'middle'}; netCell24.border=bd();
+        netCell24.numFmt='#,##0.00';
+        sc(ws,'E24',{formula:`"$    "&TEXT(${DR}N${dataR},"#,##0.00")&"    Manual Check XXXX"`},null,BLACK,false,'left');
+
+        // ROW 26-27: YEAR TO DATE
+        ['A','B','C','D','E','F','G','H','I','J','K'].forEach(col=>{
+          sc(ws,`${col}26`,'',LGREY,BLACK,false,'right');
+          sc(ws,`${col}27`,'',LGREY,BLACK,false,'right');
+        });
+        sc(ws,'A26','YEAR TO DATE',LGREY,BLACK,true,'center');
+        sc(ws,'B26',{formula:`${DR}O${dataR}`},null,BLACK,false,'right','#,##0.00');
+        sc(ws,'C26',{formula:`${DR}P${dataR}+${DR}Q${dataR}+${DR}R${dataR}+${DR}S${dataR}`},null,BLACK,false,'right','#,##0.00');
+        const netCell26=ws.getCell('D26');
+        netCell26.value={formula:`${DR}O${dataR}-${DR}P${dataR}-${DR}Q${dataR}-${DR}R${dataR}-${DR}S${dataR}`};
+        netCell26.font={name:'Calibri',size:10,bold:true,color:{argb:ORANGE}};
+        netCell26.alignment={horizontal:'right',vertical:'middle'}; netCell26.border=bd();
+        netCell26.numFmt='#,##0.00';
+
+        // ROW 30: Footer
+        sc(ws,'A30',`Employer: ${company?.bn||''} ${company?.name||''}`,LGREY,BLACK,false,'left');
+        ['B','C','D','E','F','G','H','I','J','K'].forEach(a=>sc(ws,`${a}30`,'',LGREY,BLACK,false,'left'));
+        ws.getRow(30).height=14;
+      });
+
+      const buf  = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf],{type:'application/octet-stream'});
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href=url; a.download=`${emp.name.replace(/\s+/g,'_')}_Paystubs_${new Date().getFullYear()}.xlsx`;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch(err) { alert('Export failed: '+err.message); }
+    setExportingExcel(null);
+  };
       const freq    = emp.payroll_schedule || "Bi-weekly";
       const periods = getPeriodList(freq);
       const province= emp.province || "ON";
