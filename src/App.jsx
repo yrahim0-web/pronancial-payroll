@@ -2358,6 +2358,13 @@ function PaystubsPage({ company }) {
   const [selectedRun, setSelectedRun] = useState(null);
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [allEmployees, setAllEmployees] = useState([]);
+  const [exportingExcel, setExportingExcel] = useState(null);
+
+  useEffect(() => {
+    supabase.from('employees').select('*').eq('company_id', company.id)
+      .then(({ data }) => { if (data) setAllEmployees(data); });
+  }, [company.id]);
   useEffect(() => { window.__pronancialCurrentEmp = selectedEmp; window.__pronancialCurrentRun = selectedRun; }, [selectedEmp, selectedRun]);
   const paystubRef = useRef(null);
 
@@ -2634,6 +2641,152 @@ function PaystubsPage({ company }) {
       });
   }, [company.id]);
 
+  // ─── Export full-year paystub workbook (one sheet per pay period, live formulas) ──
+  const exportAllPaystubsXLSX = async (emp) => {
+    setExportingExcel(emp.id);
+    try {
+      const XLSX = await import('xlsx');
+      const freq = emp.payroll_schedule || "Bi-weekly";
+      const periods = getPeriodList(freq);
+      const PP = PAY_PERIODS[freq] || 24;
+      const province = emp.province || "ON";
+      const provData = PROV_TAX[province] || PROV_TAX["ON"];
+      const fedTD1 = emp.td1_fed || 16452;
+      const provTD1 = emp.td1_prov || provData.bpa;
+      const vacPct = parseFloat(String(emp.vac_rate || "4%").replace("%", "")) / 100 || 0.04;
+      const isSalary = emp.type === "Salary";
+
+      // ── Rates sheet: editable scalar CRA constants ──
+      const ratesRows = [
+        ["Constant", "Value"],
+        ["EMP_RATE", emp.rate || 0],
+        ["EMP_TYPE", emp.type || "Hourly"],
+        ["PP", PP],
+        ["VAC_RATE", vacPct],
+        ["CPP_RATE", 0.0595],
+        ["CPP_BASE_RATE", 0.0495],
+        ["CPP_EXEMPTION", 3500],
+        ["CPP_MAX", 4230.45],
+        ["CPP2_RATE", 0.04],
+        ["CPP2_MAX", 416],
+        ["EI_RATE", 0.0163],
+        ["EI_MAX", 1123.07],
+        ["TD1_FED", fedTD1],
+        ["PROV_BPA", provTD1],
+        ["PROV_LOWEST_RATE", provData.brackets[0].rate],
+      ];
+      const R = {};
+      ratesRows.forEach((r, i) => { if (i > 0) R[r[0]] = i + 1; });
+      const RR = (name) => `Rates!$B$${R[name]}`;
+
+      const wsRates = XLSX.utils.aoa_to_sheet(ratesRows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsRates, "Rates");
+
+      const bracketFormula = (brackets, incomeRef) => {
+        let f = `${brackets[brackets.length-1].base}+(${incomeRef}-${brackets[brackets.length-1].min})*${brackets[brackets.length-1].rate}`;
+        for (let i = brackets.length - 2; i >= 0; i--) {
+          f = `IF(${incomeRef}<=${brackets[i].max},${brackets[i].base}+(${incomeRef}-${brackets[i].min})*${brackets[i].rate},${f})`;
+        }
+        return f;
+      };
+
+      const openYtd = {
+        gross: +(emp.opening_ytd_gross||0), cpp: +(emp.opening_ytd_cpp||0), cpp2: +(emp.opening_ytd_cpp2||0),
+        ei: +(emp.opening_ytd_ei||0), fed: +(emp.opening_ytd_fed_tax||0), prov: +(emp.opening_ytd_prov_tax||0),
+      };
+
+      let prevSheet = null;
+      periods.forEach((p) => {
+        const safeName = `P${p.period} ${p.payDate}`.replace(/[:\\/?*\[\]]/g, "").slice(0, 31);
+        const ws = {};
+        const set = (cell, val, formula) => { ws[cell] = formula ? { t:'n', f: val } : (typeof val === 'number' ? { t:'n', v: val } : { t:'s', v: String(val) }); };
+
+        set('A1', emp.name);
+        set('D1', 'Period:'); set('E1', `${p.start} - ${p.end}`);
+        set('G1', 'Pay Date:'); set('H1', p.payDate);
+        set('A2', 'Province:'); set('B2', province);
+        set('D2', 'Frequency:'); set('E2', freq);
+
+        set('B4','Reg Hrs'); set('C4','OT Hrs'); set('D4','Stat $'); set('E4','Bonus $');
+        set('B5', isSalary ? 0 : 0); set('C5', 0); set('D5', 0); set('E5', 0);
+
+        set('B7','Base Pay'); set('C7','OT Pay'); set('D7','Vac Pay'); set('E7','Gross');
+        set('F7','CPP'); set('G7','CPP2'); set('H7','EI'); set('I7','Fed Tax'); set('J7','Prov Tax'); set('K7','Net Pay');
+
+        const basePayF = isSalary ? `${RR('EMP_RATE')}/${RR('PP')}` : `B5*${RR('EMP_RATE')}`;
+        const otPayF   = isSalary ? `0` : `C5*${RR('EMP_RATE')}*1.5`;
+        set('B8', basePayF, true);
+        set('C8', otPayF, true);
+        set('D8', `(B8+C8)*${RR('VAC_RATE')}`, true);
+        set('E8', `B8+C8+D5+E5+D8`, true);
+
+        const periodExemptionF = `${RR('CPP_EXEMPTION')}/${RR('PP')}`;
+        const periodPensionableF = `MAX(E8-${periodExemptionF},0)`;
+        const cppRoomLeftF = `MAX(${RR('CPP_MAX')}-${prevSheet ? `'${prevSheet}'!I11` : openYtd.cpp},0)`;
+        set('F8', `MIN(${periodPensionableF}*${RR('CPP_RATE')},${cppRoomLeftF})`, true);
+        const cpp1RoomNeededF = `${periodPensionableF}*${RR('CPP_RATE')}`;
+        const pensionableAtCapF = `${cppRoomLeftF}/${RR('CPP_RATE')}`;
+        const excessPensionableF = `MAX(${periodPensionableF}-${pensionableAtCapF},0)`;
+        const cpp2RoomLeftF = `MAX(${RR('CPP2_MAX')}-${prevSheet ? `'${prevSheet}'!J11` : openYtd.cpp2},0)`;
+        set('G8', `IF(${cpp1RoomNeededF}>${cppRoomLeftF},MIN(${excessPensionableF}*${RR('CPP2_RATE')},${cpp2RoomLeftF}),0)`, true);
+        const eiRoomLeftF = `MAX(${RR('EI_MAX')}-${prevSheet ? `'${prevSheet}'!K11` : openYtd.ei},0)`;
+        set('H8', `MIN(E8*${RR('EI_RATE')},${eiRoomLeftF})`, true);
+
+        const annualCPPF = `MIN(${periodPensionableF}*${RR('CPP_RATE')}*${RR('PP')},${RR('CPP_MAX')})`;
+        const annualCPPBaseF = `${annualCPPF}*(${RR('CPP_BASE_RATE')}/${RR('CPP_RATE')})`;
+        const annualEIF = `MIN(E8*${RR('PP')}*${RR('EI_RATE')},${RR('EI_MAX')})`;
+        const annualGrossF = `E8*${RR('PP')}`;
+        const periodCPPEnhF = `MAX(${periodPensionableF}*(${RR('CPP_RATE')}-${RR('CPP_BASE_RATE')}),0)`;
+        const annualTaxableF = `${annualGrossF}-(${periodCPPEnhF}+G8)*${RR('PP')}`;
+        const bpafF = `IF(${annualGrossF}<=181440,16452,IF(${annualGrossF}>=258482,14829,16452-(16452-14829)*(${annualGrossF}-181440)/(258482-181440)))`;
+        const T1F = bracketFormula(FED_BRACKETS, annualTaxableF);
+        const K1F = `0.14*${bpafF}`, K2F = `0.14*${annualCPPBaseF}`, K3F = `0.14*${annualEIF}`, K4F = `0.14*MIN(B8*${RR('PP')},1500)`;
+        const annualFedTaxF = `MAX(${T1F}-${K1F}-${K2F}-${K3F}-${K4F},0)`;
+        set('I8', `ROUND((${annualFedTaxF})/${RR('PP')},2)`, true);
+
+        const TprovF = bracketFormula(provData.brackets, annualTaxableF);
+        const provCreditsF = `(${RR('PROV_BPA')}+${annualCPPBaseF}+${annualEIF})*${RR('PROV_LOWEST_RATE')}`;
+        let annualProvTaxF = `MAX(${TprovF}-${provCreditsF},0)`;
+        if (provData.surtax) {
+          annualProvTaxF = `(${annualProvTaxF})+MAX((${annualProvTaxF})-5818,0)*0.2+MAX((${annualProvTaxF})-7446,0)*0.36`;
+        }
+        if (province === 'ON') {
+          const g = annualGrossF;
+          const ohpF = `IF(${g}<=20000,0,IF(${g}<=25000,MIN(300,0.06*(${g}-20000)),IF(${g}<=36000,300,IF(${g}<=38500,MIN(450,300+0.06*(${g}-36000)),IF(${g}<=48000,450,IF(${g}<=48600,MIN(600,450+0.25*(${g}-48000)),IF(${g}<=72000,600,IF(${g}<=72600,MIN(750,600+0.25*(${g}-72000)),IF(${g}<=200000,750,IF(${g}<=200600,MIN(900,750+0.25*(${g}-200000)),900))))))))))`;
+          annualProvTaxF = `(${annualProvTaxF})+${ohpF}`;
+        }
+        set('J8', `ROUND((${annualProvTaxF})/${RR('PP')},2)`, true);
+        set('K8', `E8-F8-G8-H8-I8-J8`, true);
+
+        set('H10','YTD Gross'); set('I10','YTD CPP'); set('J10','YTD CPP2'); set('K10','YTD EI'); set('L10','YTD Fed'); set('M10','YTD Prov'); set('N10','YTD Net');
+        const prevG = prevSheet ? `'${prevSheet}'!H11` : openYtd.gross;
+        const prevC = prevSheet ? `'${prevSheet}'!I11` : openYtd.cpp;
+        const prevC2 = prevSheet ? `'${prevSheet}'!J11` : openYtd.cpp2;
+        const prevE = prevSheet ? `'${prevSheet}'!K11` : openYtd.ei;
+        const prevF = prevSheet ? `'${prevSheet}'!L11` : openYtd.fed;
+        const prevP = prevSheet ? `'${prevSheet}'!M11` : openYtd.prov;
+        set('H11', `${prevG}+E8`, true);
+        set('I11', `${prevC}+F8`, true);
+        set('J11', `${prevC2}+G8`, true);
+        set('K11', `${prevE}+H8`, true);
+        set('L11', `${prevF}+I8`, true);
+        set('M11', `${prevP}+J8`, true);
+        set('N11', `H11-I11-J11-K11-L11-M11`, true);
+
+        ws['!ref'] = 'A1:N11';
+        ws['!cols'] = Array(14).fill({ wch: 13 });
+        XLSX.utils.book_append_sheet(wb, ws, safeName);
+        prevSheet = safeName;
+      });
+
+      XLSX.writeFile(wb, `${emp.name.replace(/\s+/g, '_')}_Paystubs_${new Date().getFullYear()}.xlsx`);
+    } catch (err) {
+      alert('Export failed: ' + err.message);
+    }
+    setExportingExcel(null);
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -2663,11 +2816,21 @@ function PaystubsPage({ company }) {
           {selectedRun?.details?.length > 0 && <>
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Employees</h3>
             <div className="space-y-1">
-              {selectedRun.details.map((e,i) => (
-                <button key={i} onClick={() => setSelectedEmp(e)} className={`w-full text-left px-3 py-2 rounded-xl text-xs transition-colors ${selectedEmp?.employee_id===e.employee_id ? "bg-blue-600 text-white" : "hover:bg-gray-50 text-gray-700"}`}>
-                  <p className="font-medium">{e.name}</p>
-                </button>
-              ))}
+              {selectedRun.details.map((e,i) => {
+                const fullEmp = allEmployees.find(ae => ae.id === e.employee_id);
+                return (
+                <div key={i} className="flex items-center gap-1">
+                  <button onClick={() => setSelectedEmp(e)} className={`flex-1 text-left px-3 py-2 rounded-xl text-xs transition-colors ${selectedEmp?.employee_id===e.employee_id ? "bg-blue-600 text-white" : "hover:bg-gray-50 text-gray-700"}`}>
+                    <p className="font-medium">{e.name}</p>
+                  </button>
+                  {fullEmp && (
+                    <button onClick={() => exportAllPaystubsXLSX(fullEmp)} disabled={exportingExcel===fullEmp.id} title="Export full-year Excel workbook" className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors flex-shrink-0">
+                      {exportingExcel===fullEmp.id ? <RefreshCw size={12} className="animate-spin"/> : <FileText size={12}/>}
+                    </button>
+                  )}
+                </div>
+                );
+              })}
             </div>
           </>}
         </Card>
