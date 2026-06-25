@@ -2683,7 +2683,7 @@ function PaystubsPage({ company }) {
 
       periods.forEach((p) => {
         const detail = runByPeriodNum[p.period]; // real recorded data, or undefined if not yet run
-        const safeName = `P${p.period} ${p.payDate}`.replace(/[:\\/?*\[\]]/g, "").slice(0, 31);
+        const safeName = `P${p.period} ${p.start}`.replace(/[:\\/?*\[\]]/g, "").slice(0, 31);
         const ws = wb.addWorksheet(safeName);
         ws.columns = Array(11).fill({ width: 13 });
 
