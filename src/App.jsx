@@ -2780,7 +2780,7 @@ function PaystubsPage({ company }) {
           statC.value = +(det.stat_pay||0);
           bonC.value  = +(det.bon||0);
         } else {
-          regC.value = ''; otC.value = ''; statC.value = ''; bonC.value = '';
+          regC.value = 0; otC.value = 0; statC.value = 0; bonC.value = 0;
         }
         [regC,otC,statC,bonC].forEach(inputFill);
 
@@ -2821,7 +2821,7 @@ function PaystubsPage({ company }) {
         dataRow.getCell(col['Annual EI Est']).value    = { formula: `MIN(${Gr}${r}*${C(15)}*${C(8)},${C(9)})` };
         dataRow.getCell(col['CPP Enhancement']).value  = { formula: `MAX(${PenL}${r}*(${C(1)}-${C(2)}),0)` };
         dataRow.getCell(col['Annual Gross']).value     = { formula: `${Gr}${r}*${C(15)}` };
-        dataRow.getCell(col['Annual Taxable']).value   = { formula: `${AnnGrossL}${r}-(${CppEnhL}${r}+${Cpp2L}${r})*${C(17)}` };
+        dataRow.getCell(col['Annual Taxable']).value   = { formula: `${AnnGrossL}${r}-(${CppEnhL}${r}+${Cpp2L}${r})*${C(15)}` };
 
         const bpafCore = buildNestedIF([
           [`${AnnGrossL}${r}<=181440`, `16452`],
@@ -2855,7 +2855,7 @@ function PaystubsPage({ company }) {
         const provBeforeSurtax = `MAX(${ProvBrL}${r}-${ProvCrL}${r},0)`;
         const PS = `${ProvSurL}${r}`;
         dataRow.getCell(col['Prov Tax+Surtax']).value = { formula:
-          `LET(pbt,${provBeforeSurtax},pbt+IF(pbt>5818,(pbt-5818)*0.2,0)+IF(pbt>7446,(pbt-7446)*0.36,0))`
+          `_xlfn.LET(pbt,${provBeforeSurtax},pbt+IF(pbt>5818,(pbt-5818)*0.2,0)+IF(pbt>7446,(pbt-7446)*0.36,0))`
         };
 
         const ohpFormula = buildNestedIF([
