@@ -290,15 +290,18 @@ function calcPayroll(
   // the credit overshoots once near/at the YMPE max.
   const annualCPPBase     = annualCPP * (CPP_BASE_RATE / CPP_RATE);
 
-  // CPP2: 4% on earnings between YMPE ($74,600) and YAMPE ($85,000)
-  const annualPensionableForCPP2 = grossPeriod * PP;
+  // CPP2 only kicks in once the employee's ACTUAL YTD CPP1 contributions have
+  // reached the annual max (i.e., cumulative earnings have truly crossed the
+  // YMPE this year) — NOT by annualizing a single pay period's earnings.
   let periodCPP2 = 0;
   let annualCPP2 = 0;
-  if (annualPensionableForCPP2 > CPP2_THRESHOLD) {
-    const cpp2Pensionable = Math.min(annualPensionableForCPP2, 85000) - CPP2_THRESHOLD;
-    const cpp2RoomLeft    = Math.max(CPP2_MAX - ytdCpp2SoFar, 0);
-    periodCPP2 = +Math.min((cpp2Pensionable / PP) * CPP2_RATE, cpp2RoomLeft).toFixed(2);
-    annualCPP2 = Math.min(cpp2Pensionable * CPP2_RATE, CPP2_MAX);
+  const cpp1RoomNeededThisPeriod = periodPensionable * CPP_RATE;
+  if (cpp1RoomNeededThisPeriod > cppRoomLeft) {
+    const pensionableAtCpp1Cap = cppRoomLeft / CPP_RATE;
+    const excessPensionable    = Math.max(periodPensionable - pensionableAtCpp1Cap, 0);
+    const cpp2RoomLeft         = Math.max(CPP2_MAX - ytdCpp2SoFar, 0);
+    periodCPP2 = +Math.min(excessPensionable * CPP2_RATE, cpp2RoomLeft).toFixed(2);
+    annualCPP2 = Math.min(excessPensionable * CPP2_RATE * PP, CPP2_MAX);
   }
 
   const totalCPP = +periodCPP.toFixed(2);
