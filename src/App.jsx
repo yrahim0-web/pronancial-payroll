@@ -66,6 +66,7 @@ const VAC_RATES = { "4%": 0.04, "6%": 0.06, "8%": 0.08 };
 
 // CPP 2026
 const CPP_RATE        = 0.0595;
+const CPP_BASE_RATE   = 0.0495;
 const CPP_MAX_CONTRIB = 4230.45;  // employee max annual 2026
 const CPP_EXEMPTION   = 3500.00;  // basic annual exemption
 const CPP2_RATE       = 0.04;
@@ -284,6 +285,7 @@ function calcPayroll(
   // Annualized ESTIMATE for the K2 tax credit (T4127 Method 1) — based on this
   // period's rate continuing all year, capped at the annual max. NOT the actual YTD total.
   const annualCPP         = Math.min(periodPensionable * CPP_RATE * PP, CPP_MAX_CONTRIB);
+  const annualCPPBase     = periodPensionable * CPP_BASE_RATE * PP;
 
   // CPP2: 4% on earnings between YMPE ($74,600) and YAMPE ($85,000)
   const annualPensionableForCPP2 = grossPeriod * PP;
@@ -331,11 +333,11 @@ function calcPayroll(
   if (td1Fed !== 16452) bpaf = td1Fed;
 
   const K1 = 0.14 * bpaf;
-  const K2 = FED_CPP_CREDIT_RATE * annualCPP + FED_CPP_CREDIT_RATE * annualCPP2;
+  const K2 = FED_CPP_CREDIT_RATE * annualCPPBase;
   const K3 = 0.14 * annualEI;
   // CEA applies to employment income only (base earnings × PP, not including vac pay)
   const annualBaseOnly = baseEarnings * PP;
-  const K4 = 0.14 * Math.min(annualBaseOnly, 1433);
+  const K4 = 0.14 * Math.min(annualBaseOnly, 1500);
   const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
   const annualFedTax    = annualFedTaxRaw;
   const periodFedTax    = +Math.round(annualFedTax / PP * 100) / 100;
@@ -344,7 +346,7 @@ function calcPayroll(
   const provBPA        = td1Prov ?? provData.bpa;
   const provLowestRate = provData.brackets[0]?.rate || 0.0505;
   // T4127 Step 5: KP = (provBPA + CPP + CPP2 + EI) × lowest prov rate
-  const provCredits = (provBPA + annualCPP + annualCPP2 + annualEI) * provLowestRate;
+  const provCredits = (provBPA + annualCPPBase + annualEI) * provLowestRate;
 
   let annualProvTax = Math.max(calcBracketTax(annualTaxable, provData.brackets) - provCredits, 0);
 
@@ -358,11 +360,15 @@ function calcPayroll(
     let ohp = 0;
     const ai = annualGross;
     if      (ai <= 20000)  ohp = 0;
-    else if (ai <= 36000)  ohp = Math.min(300,  0.06 * (ai - 20000));
-    else if (ai <= 48000)  ohp = Math.min(450,  300 + 0.06 * (ai - 36000));
-    else if (ai <= 72000)  ohp = Math.min(600,  450 + 0.06 * (ai - 48000));
-    else if (ai <= 200000) ohp = Math.min(900,  600 + 0.06 * (ai - 72000));
-    else if (ai <= 200600) ohp = Math.min(900,  750 + 0.25 * (ai - 200000));
+    else if (ai <= 25000)  ohp = Math.min(300, 0.06 * (ai - 20000));
+    else if (ai <= 36000)  ohp = 300;
+    else if (ai <= 38500)  ohp = Math.min(450, 300 + 0.06 * (ai - 36000));
+    else if (ai <= 48000)  ohp = 450;
+    else if (ai <= 48600)  ohp = Math.min(600, 450 + 0.25 * (ai - 48000));
+    else if (ai <= 72000)  ohp = 600;
+    else if (ai <= 72600)  ohp = Math.min(750, 600 + 0.25 * (ai - 72000));
+    else if (ai <= 200000) ohp = 750;
+    else if (ai <= 200600) ohp = Math.min(900, 750 + 0.25 * (ai - 200000));
     else                   ohp = 900;
     annualProvTax += ohp;
   }
