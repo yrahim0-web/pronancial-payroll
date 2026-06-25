@@ -2669,8 +2669,6 @@ function PaystubsPage({ company }) {
       const cs = wb.addWorksheet('CRA_Constants');
       cs.getColumn('A').width = 34; cs.getColumn('B').width = 16; cs.getColumn('C').width = 36;
       const cRows = [
-        ['CRA 2026 Payroll Constants','',''],
-        ['','',''],
         ['CPP Rate',0.0595,'5.95%'],
         ['CPP Base Rate',0.0495,'4.95%'],
         ['CPP Max Contribution',4230.45,'Annual employee max'],
@@ -2694,17 +2692,17 @@ function PaystubsPage({ company }) {
       cRows.forEach((row,i) => {
         const er = cs.getRow(i+1);
         er.getCell(1).value = row[0]; er.getCell(2).value = row[1]; er.getCell(3).value = row[2];
-        if (i===0) er.getCell(1).font = {bold:true,size:12};
       });
-      cs.getCell('A23').value = 'NOTE: Provincial formulas are built for Ontario (ON) only.';
-      cs.getCell('A23').font = {italic:true,color:{argb:'FF888888'}};
-      cs.getCell('A24').value = 'Net Pay does not subtract CPP2, matching current app logic.';
-      cs.getCell('A24').font = {italic:true,color:{argb:'FF888888'}};
+      const noteRow = cRows.length + 2;
+      cs.getCell(`A${noteRow}`).value = 'NOTE: Provincial formulas are built for Ontario (ON) only.';
+      cs.getCell(`A${noteRow}`).font = {italic:true,color:{argb:'FF888888'}};
+      cs.getCell(`A${noteRow+1}`).value = 'Net Pay does not subtract CPP2, matching current app logic.';
+      cs.getCell(`A${noteRow+1}`).font = {italic:true,color:{argb:'FF888888'}};
 
+      // B1=CPP_RATE, B2=CPP_BASE, B3=CPP_MAX, B4=CPP_EXEMPT, B5=CPP2_RATE, B6=CPP2_MAX,
+      // B7=CPP2_THRESH, B8=EI_RATE, B9=EI_MAX, B10=FED_BPA, B11=FED_CR, B12=CEA,
+      // B13=PROV_BPA, B14=PROV_LOW, B15=PP, B16=VAC, B17=RATE, B18=TD1FED, B19=EMP_TYPE
       const C = (row) => `CRA_Constants!$B$${row}`;
-      // B3 CPP_RATE, B4 CPP_BASE, B5 CPP_MAX, B6 CPP_EXEMPT, B7 CPP2_RATE, B8 CPP2_MAX,
-      // B9 CPP2_THRESH, B10 EI_RATE, B11 EI_MAX, B12 FED_BPA, B13 FED_CR, B14 CEA,
-      // B15 PROV_BPA, B16 PROV_LOW, B17 PP, B18 VAC, B19 RATE, B20 TD1FED
 
       // ── DATA SHEET ───────────────────────────────────────────────────────
       const periods = getPeriodList(freq);
@@ -2799,37 +2797,37 @@ function PaystubsPage({ company }) {
         const OhpL=L(col['OHP']), ProvOhpL=L(col['Prov Tax+OHP']), OnRedL=L(col['ON Tax Reduction']), ProvFinL=L(col['Prov Tax Final']), ProvTaxL=L(col['Prov Tax']);
 
         dataRow.getCell(col['Base Pay']).value = isSal
-          ? { formula: `${C(19)}/${C(17)}` }
-          : { formula: `${E}${r}*${C(19)}` };
-        dataRow.getCell(col['OT Pay']).value = isSal ? 0 : { formula: `${F}${r}*${C(19)}*1.5` };
+          ? { formula: `${C(17)}/${C(15)}` }
+          : { formula: `${E}${r}*${C(17)}` };
+        dataRow.getCell(col['OT Pay']).value = isSal ? 0 : { formula: `${F}${r}*${C(17)}*1.5` };
         dataRow.getCell(col['Vacationable Earn']).value = { formula: `${I}${r}+${J}${r}` };
         dataRow.getCell(col['Employment Earn']).value   = { formula: `${I}${r}+${J}${r}+${G}${r}+${H}${r}` };
         dataRow.getCell(col['Vac Pay']).value            = { formula: `${K}${r}*${C(18)}` };
         dataRow.getCell(col['Gross']).value              = { formula: `${M}${r}+${N}${r}` };
 
-        dataRow.getCell(col['Period Pensionable']).value = { formula: `MAX(${Gr}${r}-${C(6)}/${C(17)},0)` };
-        dataRow.getCell(col['CPP1 Room Left']).value     = { formula: `MAX(${C(5)}-${YtdCpp1L}${pr},0)` };
-        dataRow.getCell(col['CPP1']).value                = { formula: `ROUND(MIN(${PenL}${r}*${C(3)},${RoomL}${r}),2)` };
+        dataRow.getCell(col['Period Pensionable']).value = { formula: `MAX(${Gr}${r}-${C(4)}/${C(15)},0)` };
+        dataRow.getCell(col['CPP1 Room Left']).value     = { formula: `MAX(${C(3)}-${YtdCpp1L}${pr},0)` };
+        dataRow.getCell(col['CPP1']).value                = { formula: `ROUND(MIN(${PenL}${r}*${C(1)},${RoomL}${r}),2)` };
         dataRow.getCell(col['YTD CPP1']).value            = { formula: `${YtdCpp1L}${pr}+${Cpp1L}${r}` };
-        dataRow.getCell(col['Excess Pensionable']).value  = { formula: `MAX(${PenL}${r}-${RoomL}${r}/${C(3)},0)` };
-        dataRow.getCell(col['CPP2 Room Left']).value      = { formula: `MAX(${C(8)}-${YtdCpp2L}${pr},0)` };
-        dataRow.getCell(col['CPP2']).value                = { formula: `IF(${PenL}${r}*${C(3)}>${RoomL}${r},ROUND(MIN(${ExcessL}${r}*${C(7)},${Cpp2RoomL}${r}),2),0)` };
+        dataRow.getCell(col['Excess Pensionable']).value  = { formula: `MAX(${PenL}${r}-${RoomL}${r}/${C(1)},0)` };
+        dataRow.getCell(col['CPP2 Room Left']).value      = { formula: `MAX(${C(6)}-${YtdCpp2L}${pr},0)` };
+        dataRow.getCell(col['CPP2']).value                = { formula: `IF(${PenL}${r}*${C(1)}>${RoomL}${r},ROUND(MIN(${ExcessL}${r}*${C(5)},${Cpp2RoomL}${r}),2),0)` };
         dataRow.getCell(col['YTD CPP2']).value            = { formula: `${YtdCpp2L}${pr}+${Cpp2L}${r}` };
-        dataRow.getCell(col['EI']).value                  = { formula: `ROUND(MIN(${Gr}${r}*${C(10)},MAX(${C(11)}-${YtdEiL}${pr},0)),2)` };
+        dataRow.getCell(col['EI']).value                  = { formula: `ROUND(MIN(${Gr}${r}*${C(8)},MAX(${C(9)}-${YtdEiL}${pr},0)),2)` };
         dataRow.getCell(col['YTD EI']).value              = { formula: `${YtdEiL}${pr}+${EiL}${r}` };
 
-        dataRow.getCell(col['Annual CPP Est']).value  = { formula: `MIN(${PenL}${r}*${C(3)}*${C(17)},${C(5)})` };
-        dataRow.getCell(col['Annual CPP Base']).value = { formula: `${AnnCppL}${r}*(${C(4)}/${C(3)})` };
-        dataRow.getCell(col['Annual EI Est']).value    = { formula: `MIN(${Gr}${r}*${C(17)}*${C(10)},${C(11)})` };
-        dataRow.getCell(col['CPP Enhancement']).value  = { formula: `MAX(${PenL}${r}*(${C(3)}-${C(4)}),0)` };
-        dataRow.getCell(col['Annual Gross']).value     = { formula: `${Gr}${r}*${C(17)}` };
+        dataRow.getCell(col['Annual CPP Est']).value  = { formula: `MIN(${PenL}${r}*${C(1)}*${C(15)},${C(3)})` };
+        dataRow.getCell(col['Annual CPP Base']).value = { formula: `${AnnCppL}${r}*(${C(2)}/${C(1)})` };
+        dataRow.getCell(col['Annual EI Est']).value    = { formula: `MIN(${Gr}${r}*${C(15)}*${C(8)},${C(9)})` };
+        dataRow.getCell(col['CPP Enhancement']).value  = { formula: `MAX(${PenL}${r}*(${C(1)}-${C(2)}),0)` };
+        dataRow.getCell(col['Annual Gross']).value     = { formula: `${Gr}${r}*${C(15)}` };
         dataRow.getCell(col['Annual Taxable']).value   = { formula: `${AnnGrossL}${r}-(${CppEnhL}${r}+${Cpp2L}${r})*${C(17)}` };
 
         const bpafCore = buildNestedIF([
           [`${AnnGrossL}${r}<=181440`, `16452`],
           [`${AnnGrossL}${r}>=258482`, `14829`],
         ], `16452-(16452-14829)*(${AnnGrossL}${r}-181440)/(258482-181440)`);
-        dataRow.getCell(col['BPAF']).value = { formula: `IF(${C(20)}<>16452,${C(20)},${bpafCore})` };
+        dataRow.getCell(col['BPAF']).value = { formula: `IF(${C(18)}<>16452,${C(18)},${bpafCore})` };
 
         const fedBracketFormula = buildNestedIF([
           [`${AnnTaxableL}${r}<=58523`,  `${AnnTaxableL}${r}*0.14`],
@@ -2840,11 +2838,11 @@ function PaystubsPage({ company }) {
         dataRow.getCell(col['Fed Bracket Tax(T1)']).value = { formula: fedBracketFormula };
 
         dataRow.getCell(col['Annual Fed Tax Raw']).value = { formula:
-          `MAX(${T1L}${r}-${C(13)}*${BpafL}${r}-${C(13)}*${AnnCppBaseL}${r}-${C(13)}*${AnnEiL}${r}-${C(13)}*MIN(${I}${r}*${C(17)},${C(14)}),0)`
+          `MAX(${T1L}${r}-${C(11)}*${BpafL}${r}-${C(11)}*${AnnCppBaseL}${r}-${C(11)}*${AnnEiL}${r}-${C(11)}*MIN(${I}${r}*${C(15)},${C(12)}),0)`
         };
-        dataRow.getCell(col['Fed Tax']).value = { formula: `ROUND(${FedRawL}${r}/${C(17)},2)` };
+        dataRow.getCell(col['Fed Tax']).value = { formula: `ROUND(${FedRawL}${r}/${C(15)},2)` };
 
-        dataRow.getCell(col['Prov Credits']).value = { formula: `(${C(15)}+${AnnCppBaseL}${r}+${AnnEiL}${r})*${C(16)}` };
+        dataRow.getCell(col['Prov Credits']).value = { formula: `(${C(13)}+${AnnCppBaseL}${r}+${AnnEiL}${r})*${C(14)}` };
 
         const provBracketFormula = buildNestedIF([
           [`${AnnTaxableL}${r}<=53891`,  `${AnnTaxableL}${r}*0.0505`],
@@ -2855,8 +2853,9 @@ function PaystubsPage({ company }) {
         dataRow.getCell(col['Prov Bracket Tax']).value = { formula: provBracketFormula };
 
         const provBeforeSurtax = `MAX(${ProvBrL}${r}-${ProvCrL}${r},0)`;
+        const PS = `${ProvSurL}${r}`;
         dataRow.getCell(col['Prov Tax+Surtax']).value = { formula:
-          `${provBeforeSurtax}+IF(${provBeforeSurtax}>5818,(${provBeforeSurtax}-5818)*0.2,0)+IF(${provBeforeSurtax}>7446,(${provBeforeSurtax}-7446)*0.36,0)`
+          `LET(pbt,${provBeforeSurtax},pbt+IF(pbt>5818,(pbt-5818)*0.2,0)+IF(pbt>7446,(pbt-7446)*0.36,0))`
         };
 
         const ohpFormula = buildNestedIF([
@@ -2878,7 +2877,7 @@ function PaystubsPage({ company }) {
           `IF(${AnnTaxableL}${r}<21000,MAX(0,MIN(274,274-0.05*MAX(0,${AnnTaxableL}${r}-16291))),0)`
         };
         dataRow.getCell(col['Prov Tax Final']).value = { formula: `MAX(${ProvOhpL}${r}-${OnRedL}${r},0)` };
-        dataRow.getCell(col['Prov Tax']).value = { formula: `ROUND(${ProvFinL}${r}/${C(17)},2)` };
+        dataRow.getCell(col['Prov Tax']).value = { formula: `ROUND(${ProvFinL}${r}/${C(15)},2)` };
 
         // Net Pay = Gross - CPP1 - EI - FedTax - ProvTax (CPP2 not subtracted, matches app)
         dataRow.getCell(col['Net Pay']).value = { formula: `${Gr}${r}-${Cpp1L}${r}-${EiL}${r}-${FedTaxL}${r}-${ProvTaxL}${r}` };
