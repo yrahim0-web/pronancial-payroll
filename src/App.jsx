@@ -2921,7 +2921,6 @@ function PaystubsPage({ company }) {
 
         ws.mergeCells('D24:D25');
         ws.getCell('D24').value     = net;
-        ws.getCell('D24').fill      = fill('00000000'); // no fill
         ws.getCell('D24').font      = { name:'Calibri', size:10, bold:true, color:{argb:'FFFF8C00'} };
         ws.getCell('D24').alignment = aln('right');
         ws.getCell('D24').border    = bdr();
