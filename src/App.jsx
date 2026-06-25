@@ -312,8 +312,10 @@ function calcPayroll(
   // CRA taxes on base earnings only (not including vacation pay)
   // CRA taxable income = annualized gross - CPP - EI (T4127 Method 1)
   const annualGross   = grossPeriod * PP;
-  // T4127 Step 1: A = I × PP (no deductions — K2/K3 credits handle CPP/EI)
-  const annualTaxable = annualGross;
+  // T4127: the "enhanced" CPP/CPP2 contribution (above the legacy 4.95% base rate)
+  // is deducted directly from taxable income, not just credited.
+  const periodCPPEnhancement = Math.max(periodPensionable * (CPP_RATE - CPP_BASE_RATE), 0);
+  const annualTaxable = annualGross - (periodCPPEnhancement + periodCPP2) * PP;
 
   // T4127 Step 2: CEA 2026 = lesser of employment income or $1,433
   const CEA = Math.min(annualGross, 1433);
