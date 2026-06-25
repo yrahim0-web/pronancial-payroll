@@ -2646,331 +2646,275 @@ function PaystubsPage({ company }) {
     setExportingExcel(emp.id);
     try {
       const ExcelJS = (await import('exceljs')).default;
-      const freq = emp.payroll_schedule || "Bi-weekly";
+      const freq    = emp.payroll_schedule || "Bi-weekly";
       const periods = getPeriodList(freq);
-      const PP = PAY_PERIODS[freq] || 24;
-      const province = emp.province || "ON";
-      const provData = PROV_TAX[province] || PROV_TAX["ON"];
-      const vacPct = parseFloat(String(emp.vac_rate || "4%").replace("%","")) / 100 || 0.04;
-      const isSalary = emp.type === "Salary";
+      const province= emp.province || "ON";
+      const provData= PROV_TAX[province] || PROV_TAX["ON"];
+      const vacPct  = parseFloat(String(emp.vac_rate||"4%").replace("%",""))/100||0.04;
+      const isSal   = emp.type === "Salary";
 
       const { data: allRuns } = await supabase
-        .from('payroll_runs').select('period, details').eq('company_id', emp.company_id);
-      const runByPeriodNum = {};
-      (allRuns || []).forEach(run => {
-        const m = (run.period || '').match(/Period\s+(\d+)/i);
+        .from('payroll_runs').select('period,details').eq('company_id', emp.company_id);
+      const byPeriod = {};
+      (allRuns||[]).forEach(run => {
+        const m = (run.period||'').match(/Period\s+(\d+)/i);
         if (!m) return;
-        const d = (run.details || []).find(x => x.employee_id === emp.id);
-        if (d) runByPeriodNum[+m[1]] = d;
+        const d = (run.details||[]).find(x => x.employee_id === emp.id);
+        if (d) byPeriod[+m[1]] = d;
       });
 
       const wb = new ExcelJS.Workbook();
 
-      // ── Style constants ──
-      const C_DGREY  = 'FF595959';
-      const C_MGREY  = 'FF808080';
-      const C_LGREY  = 'FFC0C0C0';
-      const C_BLUE   = 'FF6495ED';
-      const C_WHITE  = 'FFFFFFFF';
-      const C_BLACK  = 'FF000000';
-      const C_TEAL   = 'FF008080';
-      const C_YELLOW = 'FFFFFF99';
-      const C_GREEN  = 'FF006400';
-      const C_DKGRN  = 'FF90EE90';
+      const DGREY = 'FF595959';
+      const MGREY = 'FF808080';
+      const LGREY = 'FFC0C0C0';
+      const BLUE  = 'FF6495ED';
+      const WHITE = 'FFFFFFFF';
+      const BLACK = 'FF000000';
+      const TEAL  = 'FF008080';
+      const YELL  = 'FFFFFF99';
+      const LGRN  = 'FF90EE90';
+      const ORANGE= 'FFFF8C00';
 
-      const fill = (argb) => ({ type:'pattern', pattern:'solid', fgColor:{argb} });
-      const bdr  = () => ({
-        top:   {style:'thin', color:{argb:'FF000000'}},
-        bottom:{style:'thin', color:{argb:'FF000000'}},
-        left:  {style:'thin', color:{argb:'FF000000'}},
-        right: {style:'thin', color:{argb:'FF000000'}},
+      const fl = (a) => ({type:'pattern',pattern:'solid',fgColor:{argb:a}});
+      const bd = () => ({
+        top:   {style:'thin',color:{argb:'FFB0B0B0'}},
+        bottom:{style:'thin',color:{argb:'FFB0B0B0'}},
+        left:  {style:'thin',color:{argb:'FFB0B0B0'}},
+        right: {style:'thin',color:{argb:'FFB0B0B0'}},
       });
-      const font = (color, bold, size) => ({ name:'Calibri', size:size||9, bold:!!bold, color:{argb:color||C_BLACK} });
-      const aln  = (h, wrap) => ({ horizontal:h||'left', vertical:'middle', wrapText:!!wrap });
-
-      const sc = (cell, fillArgb, fontColor, bold, alignH, numFmt, val) => {
-        if (val !== undefined) cell.value = val;
-        if (fillArgb) cell.fill = fill(fillArgb);
-        cell.font      = font(fontColor||C_BLACK, bold);
-        cell.alignment = aln(alignH||'left');
-        cell.border    = bdr();
-        if (numFmt) cell.numFmt = numFmt;
+      const thickBd = () => ({
+        top:   {style:'thin',color:{argb:BLACK}},
+        bottom:{style:'thin',color:{argb:BLACK}},
+        left:  {style:'thin',color:{argb:BLACK}},
+        right: {style:'thin',color:{argb:BLACK}},
+      });
+      const s = (ws, addr, val, fillA, fontColor, bold, alignH, numFmt) => {
+        const c = typeof addr === 'string' ? ws.getCell(addr) : addr;
+        if (val !== undefined) c.value = val;
+        if (fillA) c.fill = fl(fillA);
+        c.font      = {name:'Calibri',size:9,bold:!!bold,color:{argb:fontColor||BLACK}};
+        c.alignment = {horizontal:alignH||'left',vertical:'middle'};
+        c.border    = thickBd();
+        if (numFmt) c.numFmt = numFmt;
+        return c;
       };
 
-      const openYtd = {
-        gross: +(emp.opening_ytd_gross||0),
-        cpp:   +(emp.opening_ytd_cpp||0),
-        cpp2:  +(emp.opening_ytd_cpp2||0),
-        ei:    +(emp.opening_ytd_ei||0),
-        fed:   +(emp.opening_ytd_fed_tax||0),
-        prov:  +(emp.opening_ytd_prov_tax||0),
-        vac:   +(emp.opening_ytd_vac||0),
-        erCpp: +(emp.opening_ytd_er_cpp||0),
-        erEi:  +(emp.opening_ytd_er_ei||0),
-      };
-
-      let prevSheet = null;
-
-      periods.forEach((p) => {
-        const det = runByPeriodNum[p.period];
-        const sn  = `P${p.period} ${p.start}`.replace(/[:\\/?*\[\]]/g,"").slice(0,31);
+      periods.forEach(p => {
+        const det = byPeriod[p.period];
+        const sn  = `P${p.period} ${p.start}`.replace(/[:\\/?*\[\]]/g,'').slice(0,31);
         const ws  = wb.addWorksheet(sn);
 
-        // Column widths: A=14, B=9, C=9, D=11, E=13, F=13, G=11, H=13, I=10, J=11, K=13
         ws.columns = [
-          {width:14},{width:9},{width:9},{width:11},{width:14},
+          {width:13},{width:9},{width:9},{width:11},{width:14},
           {width:13},{width:12},{width:13},{width:10},{width:12},{width:13},
         ];
 
-        // ── ROW 1: Employee name + header info ──
+        const regHrs  = det ? +(det.reg_hrs||0)             : (isSal?88:0);
+        const statAmt = det ? +(det.stat_pay||0)            : 0;
+        const basePay = det ? +(det.base_earnings||0)       : 0;
+        const vacPay  = det ? +(det.vac_pay||0)             : 0;
+        const gross   = det ? +(det.gross||0)               : 0;
+        const cpp     = det ? +(det.cpp||0)                 : 0;
+        const ei      = det ? +(det.ei||0)                  : 0;
+        const fedTax  = det ? +(det.fed_tax||0)             : 0;
+        const provTax = det ? +(det.prov_tax||0)            : 0;
+        const net     = det ? +(det.net||0)                 : 0;
+        const erCpp   = det ? +(det.er_cpp||0)              : 0;
+        const erEi    = det ? +(det.er_ei||0)               : 0;
+        const ytdGross= det ? +(det.ytd_gross||0)           : 0;
+        const ytdBase = det ? +(det.ytd_base_earnings||0)   : 0;
+        const ytdCpp  = det ? +(det.ytd_cpp||0)             : 0;
+        const ytdEi   = det ? +(det.ytd_ei||0)              : 0;
+        const ytdFed  = det ? +(det.ytd_fed_tax||0)         : 0;
+        const ytdProv = det ? +(det.ytd_prov_tax||0)        : 0;
+        const ytdVac  = det ? +(det.ytd_vac||0)             : 0;
+        const ytdErCpp= det ? +(det.ytd_er_cpp||0)          : 0;
+        const ytdErEi = det ? +(det.ytd_er_ei||0)           : 0;
+        const ytdNet  = ytdGross-ytdCpp-ytdEi-ytdFed-ytdProv;
+        const totDed  = cpp+ei+fedTax+provTax;
+        const ytdDed  = ytdCpp+ytdEi+ytdFed+ytdProv;
+
+        // ROW 1
         ws.getCell('A1').value = (emp.name||'').toUpperCase();
-        ws.getCell('A1').font  = font(C_BLACK, true, 10);
+        ws.getCell('A1').font  = {name:'Calibri',size:10,bold:true,color:{argb:BLACK}};
         ws.getCell('C1').value = 'Employee #0001';
         ws.getCell('F1').value = 'Department#02';
         ws.getCell('G1').value = 'Period Start';
         ws.getCell('H1').value = p.start;
-        ws.getCell('H1').font  = font(C_BLACK, false, 9);
         ws.getCell('J1').value = 'Pay Day';
         ws.getCell('K1').value = p.payDate;
-        ws.getCell('K1').font  = font(C_BLACK, false, 9);
+        ws.getCell('K1').font  = {name:'Calibri',size:9,bold:true,color:{argb:BLACK}};
 
-        // ── ROW 2: SIN + period end ──
+        // ROW 2
         ws.getCell('A2').value = 'SIN';
-        ws.getCell('B2').value = (emp.sin || '5*******0');
+        ws.getCell('B2').value = emp.sin||'5*******0';
         ws.getCell('C2').value = 'Employee#0001';
         ws.getCell('D2').value = 'Employer#0001';
         ws.getCell('G2').value = 'Period End';
         ws.getCell('H2').value = p.end;
 
-        // ── ROW 3: Section header spans ──
-        ws.mergeCells('A3:E3');
-        sc(ws.getCell('A3'), C_DGREY, C_WHITE, true, 'center', null, 'Statement of Earnings');
+        // ROW 3: Section headers — NO mergeCells, use individual cells
+        s(ws,'A3','Statement of Earnings',DGREY,WHITE,true,'center');
+        s(ws,'B3','',DGREY,WHITE,false,'center');
+        s(ws,'C3','',DGREY,WHITE,false,'center');
+        s(ws,'D3','',DGREY,WHITE,false,'center');
+        s(ws,'E3','',DGREY,WHITE,false,'center');
+        s(ws,'F3','Employee Deductions',DGREY,WHITE,true,'center');
+        s(ws,'G3','',DGREY,WHITE,false,'center');
+        s(ws,'H3','',DGREY,WHITE,false,'center');
+        s(ws,'I3','Employer Contributions',DGREY,WHITE,true,'center');
+        s(ws,'J3','',DGREY,WHITE,false,'center');
+        s(ws,'K3','',DGREY,WHITE,false,'center');
 
-        ws.mergeCells('F3:K3');
-        sc(ws.getCell('F3'), C_DGREY, C_WHITE, true, 'center', null, 'Employee Deductions and Employer Contributions');
+        // ROW 4: Column headers
+        s(ws,'A4','',    MGREY,WHITE,true,'center');
+        s(ws,'B4','HOURS',MGREY,WHITE,true,'center');
+        s(ws,'C4','RATE', MGREY,WHITE,true,'center');
+        s(ws,'D4','AMOUNT',MGREY,WHITE,true,'center');
+        s(ws,'E4','Y.T.D',MGREY,WHITE,true,'center');
+        s(ws,'F4','TYPE',  MGREY,WHITE,true,'center');
+        s(ws,'G4','CURRENT',MGREY,WHITE,true,'center');
+        s(ws,'H4','Y.T.D', MGREY,WHITE,true,'center');
+        s(ws,'I4','TYPE',   MGREY,WHITE,true,'center');
+        s(ws,'J4','CURRENT',MGREY,WHITE,true,'center');
+        s(ws,'K4','Y.T.D',  MGREY,WHITE,true,'center');
 
-        // ── ROW 4: Column sub-headers ──
-        [
-          ['A4','',       C_MGREY],
-          ['B4','HOURS',  C_MGREY],
-          ['C4','RATE',   C_MGREY],
-          ['D4','AMOUNT', C_MGREY],
-          ['E4','Y.T.D',  C_MGREY],
-          ['F4','TYPE',   C_MGREY],
-          ['G4','CURRENT',C_MGREY],
-          ['H4','Y.T.D',  C_MGREY],
-          ['I4','TYPE',   C_MGREY],
-          ['J4','CURRENT',C_MGREY],
-          ['K4','Y.T.D',  C_MGREY],
-        ].forEach(([addr, val, bg]) => sc(ws.getCell(addr), bg, C_WHITE, true, 'center', null, val));
+        // ROW 5: SALARY/REGULAR
+        s(ws,'A5', isSal?'SALARY':'REGULAR', null,BLACK,false,'left');
+        ws.getCell('B5').value=regHrs; ws.getCell('B5').fill=fl(YELL);
+        ws.getCell('B5').font={name:'Calibri',size:9,color:{argb:BLACK}};
+        ws.getCell('B5').alignment={horizontal:'right',vertical:'middle'};
+        ws.getCell('B5').border=thickBd(); ws.getCell('B5').numFmt='#,##0.00';
+        s(ws,'C5',`$${Number(emp.rate||0).toFixed(2)}`,null,BLACK,false,'right');
+        s(ws,'D5',basePay,null,BLACK,false,'right','#,##0.00');
+        ws.getCell('E5').value=ytdBase; ws.getCell('E5').fill=fl(LGRN);
+        ws.getCell('E5').font={name:'Calibri',size:9,color:{argb:BLACK}};
+        ws.getCell('E5').alignment={horizontal:'right',vertical:'middle'};
+        ws.getCell('E5').border=thickBd(); ws.getCell('E5').numFmt='#,##0.00';
+        s(ws,'F5','FED.TAX',null,BLACK,false,'left');
+        s(ws,'G5',fedTax,null,BLACK,false,'right','#,##0.00');
+        s(ws,'H5',ytdFed,null,BLACK,false,'right','#,##0.00');
+        s(ws,'I5','',null,BLACK,false,'left');
+        s(ws,'J5',0,null,BLACK,false,'right','#,##0.00');
+        s(ws,'K5',0,null,BLACK,false,'right','#,##0.00');
 
-        // ── Data values ──
-        const regHrs  = det ? +(det.reg_hrs||0)   : (isSalary ? 88 : 0);
-        const otHrs   = det ? +(det.ot_hrs||0)    : 0;
-        const statAmt = det ? +(det.stat_pay||0)  : 0;
-        const basePay = det ? +(det.base_earnings||0) : 0;
-        const otPay   = det ? +(det.ot_pay||0)    : 0;
-        const vacPay  = det ? +(det.vac_pay||0)   : 0;
-        const gross   = det ? +(det.gross||0)      : 0;
-        const cpp     = det ? +(det.cpp||0)        : 0;
-        const ei      = det ? +(det.ei||0)         : 0;
-        const fedTax  = det ? +(det.fed_tax||0)    : 0;
-        const provTax = det ? +(det.prov_tax||0)   : 0;
-        const net     = det ? +(det.net||0)        : 0;
-        const erCpp   = det ? +(det.er_cpp||0)     : 0;
-        const erEi    = det ? +(det.er_ei||0)      : 0;
+        // ROW 6: SICK HRS
+        s(ws,'A6','SICK HRS',null,BLACK,false,'left');
+        s(ws,'B6','',null,BLACK,false,'right');
+        s(ws,'C6','',null,BLACK,false,'right');
+        s(ws,'D6',0,null,BLACK,false,'right','#,##0.00');
+        ws.getCell('E6').value=0; ws.getCell('E6').fill=fl(LGRN);
+        ws.getCell('E6').font={name:'Calibri',size:9,color:{argb:BLACK}};
+        ws.getCell('E6').alignment={horizontal:'right',vertical:'middle'};
+        ws.getCell('E6').border=thickBd(); ws.getCell('E6').numFmt='#,##0.00';
+        s(ws,'F6','CPP',null,BLACK,false,'left');
+        s(ws,'G6',cpp,null,BLACK,false,'right','#,##0.00');
+        s(ws,'H6',ytdCpp,null,BLACK,false,'right','#,##0.00');
+        s(ws,'I6','CPP',null,BLACK,false,'left');
+        s(ws,'J6',erCpp,null,BLACK,false,'right','#,##0.00');
+        s(ws,'K6',ytdErCpp,null,BLACK,false,'right','#,##0.00');
 
-        // YTD values
-        const ytdGross = det ? +(det.ytd_gross||0)    : 0;
-        const ytdCpp   = det ? +(det.ytd_cpp||0)      : 0;
-        const ytdEi    = det ? +(det.ytd_ei||0)       : 0;
-        const ytdFed   = det ? +(det.ytd_fed_tax||0)  : 0;
-        const ytdProv  = det ? +(det.ytd_prov_tax||0) : 0;
-        const ytdVac   = det ? +(det.ytd_vac||0)      : 0;
-        const ytdErCpp = det ? +(det.ytd_er_cpp||0)   : 0;
-        const ytdErEi  = det ? +(det.ytd_er_ei||0)    : 0;
-        const ytdBase  = det ? +(det.ytd_base_earnings||0) : 0;
-        const ytdNet   = ytdGross - ytdCpp - ytdEi - ytdFed - ytdProv;
+        // ROW 7: STAT
+        ws.getCell('A7').value='STAT';
+        ws.getCell('A7').font={name:'Calibri',size:9,bold:false,color:{argb:TEAL}};
+        ws.getCell('A7').alignment={horizontal:'left',vertical:'middle'};
+        ws.getCell('A7').border=thickBd();
+        s(ws,'B7','',null,BLACK,false,'right');
+        s(ws,'C7','',null,BLACK,false,'right');
+        s(ws,'D7',statAmt,null,BLACK,false,'right','#,##0.00');
+        s(ws,'E7',0,null,BLACK,false,'right','#,##0.00');
+        s(ws,'F7','EI',null,BLACK,false,'left');
+        s(ws,'G7',ei,null,BLACK,false,'right','#,##0.00');
+        s(ws,'H7',ytdEi,null,BLACK,false,'right','#,##0.00');
+        s(ws,'I7','EI',null,BLACK,false,'left');
+        s(ws,'J7',erEi,null,BLACK,false,'right','#,##0.00');
+        s(ws,'K7',ytdErEi,null,BLACK,false,'right','#,##0.00');
 
-        // ── ROW 5: SALARY / REGULAR ──
-        sc(ws.getCell('A5'), null, C_BLACK, false, 'left', null, isSalary ? 'SALARY' : 'REGULAR');
-        // Hours cell - yellow input
-        ws.getCell('B5').value = regHrs;
-        ws.getCell('B5').fill  = fill(C_YELLOW);
-        ws.getCell('B5').font  = font(C_BLACK, false, 9);
-        ws.getCell('B5').alignment = aln('right');
-        ws.getCell('B5').border    = bdr();
-        ws.getCell('B5').numFmt    = '#,##0.00';
-        // Rate
-        sc(ws.getCell('C5'), null, C_BLACK, false, 'right', null, `$${Number(emp.rate||0).toFixed(2)}`);
-        // Amount
-        sc(ws.getCell('D5'), null, C_BLACK, false, 'right', '#,##0.00', basePay);
-        // YTD base earnings - green highlight like Nitharjah format
-        ws.getCell('E5').value     = ytdBase;
-        ws.getCell('E5').fill      = fill(C_DKGRN);
-        ws.getCell('E5').font      = font(C_BLACK, false, 9);
-        ws.getCell('E5').alignment = aln('right');
-        ws.getCell('E5').border    = bdr();
-        ws.getCell('E5').numFmt    = '#,##0.00';
-        // FED.TAX
-        sc(ws.getCell('F5'), null, C_BLACK, false, 'left', null, 'FED.TAX');
-        sc(ws.getCell('G5'), null, C_BLACK, false, 'right', '#,##0.00', fedTax);
-        sc(ws.getCell('H5'), null, C_BLACK, false, 'right', '#,##0.00', ytdFed);
-        // Employer cols blank for fed tax row
-        sc(ws.getCell('I5'), null, C_BLACK, false, 'left',  null, '');
-        sc(ws.getCell('J5'), null, C_BLACK, false, 'right', '#,##0.00', 0);
-        sc(ws.getCell('K5'), null, C_BLACK, false, 'right', '#,##0.00', 0);
+        // ROW 8: VAC.PAY
+        s(ws,'A8','VAC.PAY',null,BLACK,false,'left');
+        ws.getCell('B8').value='0.0'; ws.getCell('B8').fill=fl(YELL);
+        ws.getCell('B8').font={name:'Calibri',size:9,color:{argb:BLACK}};
+        ws.getCell('B8').alignment={horizontal:'right',vertical:'middle'};
+        ws.getCell('B8').border=thickBd();
+        s(ws,'C8',`${Math.round(vacPct*100)}%`,null,BLACK,false,'right');
+        s(ws,'D8',vacPay,null,BLACK,false,'right','#,##0.00');
+        s(ws,'E8',ytdVac,null,BLACK,false,'right','#,##0.00');
+        s(ws,'F8','PROV.TAX',null,BLACK,false,'left');
+        s(ws,'G8',provTax,null,BLACK,false,'right','#,##0.00');
+        s(ws,'H8',ytdProv,null,BLACK,false,'right','#,##0.00');
+        s(ws,'I8','',null,BLACK,false,'left');
+        s(ws,'J8','',null,BLACK,false,'right');
+        s(ws,'K8','',null,BLACK,false,'right');
 
-        // ── ROW 6: SICK HRS ──
-        sc(ws.getCell('A6'), null, C_BLACK, false, 'left',  null,      'SICK HRS');
-        sc(ws.getCell('B6'), null, C_BLACK, false, 'right', null,      '');
-        sc(ws.getCell('C6'), null, C_BLACK, false, 'right', null,      '');
-        sc(ws.getCell('D6'), null, C_BLACK, false, 'right', '#,##0.00', 0);
-        // YTD sick = 0 but green highlight
-        ws.getCell('E6').value     = 0;
-        ws.getCell('E6').fill      = fill(C_DKGRN);
-        ws.getCell('E6').font      = font(C_BLACK, false, 9);
-        ws.getCell('E6').alignment = aln('right');
-        ws.getCell('E6').border    = bdr();
-        ws.getCell('E6').numFmt    = '#,##0.00';
-        // CPP
-        sc(ws.getCell('F6'), null, C_BLACK, false, 'left',  null,      'CPP');
-        sc(ws.getCell('G6'), null, C_BLACK, false, 'right', '#,##0.00', cpp);
-        sc(ws.getCell('H6'), null, C_BLACK, false, 'right', '#,##0.00', ytdCpp);
-        sc(ws.getCell('I6'), null, C_BLACK, false, 'left',  null,      'CPP');
-        sc(ws.getCell('J6'), null, C_BLACK, false, 'right', '#,##0.00', erCpp);
-        sc(ws.getCell('K6'), null, C_BLACK, false, 'right', '#,##0.00', ytdErCpp);
-
-        // ── ROW 7: STAT ──
-        ws.getCell('A7').value     = 'STAT';
-        ws.getCell('A7').font      = font(C_TEAL, false, 9);
-        ws.getCell('A7').alignment = aln('left');
-        ws.getCell('A7').border    = bdr();
-        sc(ws.getCell('B7'), null, C_BLACK, false, 'right', null,       '');
-        sc(ws.getCell('C7'), null, C_BLACK, false, 'right', null,       '');
-        sc(ws.getCell('D7'), null, C_BLACK, false, 'right', '#,##0.00', statAmt);
-        sc(ws.getCell('E7'), null, C_BLACK, false, 'right', '#,##0.00', 0);
-        // EI
-        sc(ws.getCell('F7'), null, C_BLACK, false, 'left',  null,      'EI');
-        sc(ws.getCell('G7'), null, C_BLACK, false, 'right', '#,##0.00', ei);
-        sc(ws.getCell('H7'), null, C_BLACK, false, 'right', '#,##0.00', ytdEi);
-        sc(ws.getCell('I7'), null, C_BLACK, false, 'left',  null,      'EI');
-        sc(ws.getCell('J7'), null, C_BLACK, false, 'right', '#,##0.00', erEi);
-        sc(ws.getCell('K7'), null, C_BLACK, false, 'right', '#,##0.00', ytdErEi);
-
-        // ── ROW 8: OT row (if hourly) / blank (if salary) ──
-        sc(ws.getCell('A8'), null, C_BLACK, false, 'left', null, otHrs > 0 ? 'OT PAY' : '');
-        sc(ws.getCell('B8'), null, C_BLACK, false, 'right', null, otHrs > 0 ? otHrs : '');
-        sc(ws.getCell('C8'), null, C_BLACK, false, 'right', null, '');
-        sc(ws.getCell('D8'), null, C_BLACK, false, 'right', '#,##0.00', otPay);
-        sc(ws.getCell('E8'), null, C_BLACK, false, 'right', '#,##0.00', 0);
-        ['F8','G8','H8','I8','J8','K8'].forEach(a => sc(ws.getCell(a), null, C_BLACK, false, 'left', null, ''));
-
-        // ── ROW 9: VAC.PAY ──
-        sc(ws.getCell('A9'), null, C_BLACK, false, 'left',  null,      'VAC.PAY');
-        sc(ws.getCell('B9'), null, C_BLACK, false, 'right', null,      '0.0');
-        sc(ws.getCell('C9'), null, C_BLACK, false, 'right', null,      `${Math.round(vacPct*100)}%`);
-        sc(ws.getCell('D9'), null, C_BLACK, false, 'right', '#,##0.00', vacPay);
-        sc(ws.getCell('E9'), null, C_BLACK, false, 'right', '#,##0.00', ytdVac);
-        ['F9','G9','H9','I9','J9','K9'].forEach(a => sc(ws.getCell(a), null, C_BLACK, false, 'left', null, ''));
-
-        // ── ROWS 10-20: Empty rows with borders ──
-        for (let r = 10; r <= 20; r++) {
-          ['A','B','C','D','E','F','G','H','I','J','K'].forEach(col => {
-            const cell = ws.getCell(`${col}${r}`);
-            cell.value  = '';
-            cell.border = bdr();
+        // ROWS 9-20: empty
+        for (let r=9;r<=20;r++) {
+          ['A','B','C','D','E','F','G','H','I','J','K'].forEach(col=>{
+            ws.getCell(`${col}${r}`).value='';
+            ws.getCell(`${col}${r}`).border=thickBd();
           });
         }
 
-        // ── ROW 21: Spacer (no border) ──
-        ws.getRow(21).height = 8;
+        ws.getRow(21).height=6;
 
-        // ── ROW 22-23: SUMMARY header (merged rows) ──
-        ws.mergeCells('A22:A23');
-        sc(ws.getCell('A22'), C_DGREY, C_WHITE, true, 'center', null, 'SUMMARY');
+        // ROW 22-23: SUMMARY — NO mergeCells
+        s(ws,'A22','SUMMARY',DGREY,WHITE,true,'center');
+        s(ws,'A23','',DGREY,WHITE,false,'center');
+        s(ws,'B22','GROSS',DGREY,WHITE,true,'center');
+        s(ws,'B23','PAY',DGREY,WHITE,true,'center');
+        s(ws,'C22','DEDUCTIONS',DGREY,WHITE,true,'center');
+        s(ws,'C23','',DGREY,WHITE,false,'center');
+        s(ws,'D22','NET PAY',BLUE,WHITE,true,'center');
+        s(ws,'D23','',BLUE,WHITE,false,'center');
+        ['E22','F22','G22','H22','I22','J22','K22'].forEach((a,i)=>
+          s(ws,a,i===0?'NET PAY ALLOCATION':'',DGREY,WHITE,i===0,i===0?'center':'left'));
+        ['E23','F23','G23','H23','I23','J23','K23'].forEach(a=>
+          s(ws,a,'',DGREY,WHITE,false,'left'));
 
-        ws.mergeCells('B22:B23');
-        ws.getCell('B22').value     = 'GROSS\nPAY';
-        ws.getCell('B22').fill      = fill(C_DGREY);
-        ws.getCell('B22').font      = font(C_WHITE, true, 9);
-        ws.getCell('B22').alignment = { horizontal:'center', vertical:'middle', wrapText:true };
-        ws.getCell('B22').border    = bdr();
+        ws.getRow(22).height=14; ws.getRow(23).height=14;
 
-        ws.mergeCells('C22:C23');
-        sc(ws.getCell('C22'), C_DGREY, C_WHITE, true, 'center', null, 'DEDUCTIONS');
+        // ROW 24-25: CURRENT — NO mergeCells
+        s(ws,'A24','CURRENT',LGREY,BLACK,true,'center');
+        s(ws,'A25','',LGREY,BLACK,false,'center');
+        s(ws,'B24',gross,null,BLACK,false,'right','#,##0.00');
+        s(ws,'B25','',null,BLACK,false,'right');
+        s(ws,'C24',totDed,null,BLACK,false,'right','#,##0.00');
+        s(ws,'C25','',null,BLACK,false,'right');
+        ws.getCell('D24').value=net;
+        ws.getCell('D24').font={name:'Calibri',size:10,bold:true,color:{argb:ORANGE}};
+        ws.getCell('D24').alignment={horizontal:'right',vertical:'middle'};
+        ws.getCell('D24').border=thickBd(); ws.getCell('D24').numFmt='#,##0.00';
+        ws.getCell('D25').value='';
+        ws.getCell('D25').border=thickBd();
+        const allocText=`$    ${Number(net).toFixed(2)}    Manual Check was issued - Check Number XXXX`;
+        s(ws,'E24',allocText,null,BLACK,false,'left');
+        ['F24','G24','H24','I24','J24','K24'].forEach(a=>s(ws,a,'',null,BLACK,false,'left'));
+        ['E25','F25','G25','H25','I25','J25','K25'].forEach(a=>s(ws,a,'',null,BLACK,false,'left'));
 
-        ws.mergeCells('D22:D23');
-        sc(ws.getCell('D22'), C_BLUE, C_WHITE, true, 'center', null, 'NET PAY');
+        ws.getRow(24).height=14; ws.getRow(25).height=14;
 
-        ws.mergeCells('E22:K23');
-        sc(ws.getCell('E22'), C_DGREY, C_WHITE, true, 'center', null, 'NET PAY ALLOCATION');
+        // ROW 26-27: YEAR TO DATE — NO mergeCells
+        s(ws,'A26','YEAR TO DATE',LGREY,BLACK,true,'center');
+        s(ws,'A27','',LGREY,BLACK,false,'center');
+        s(ws,'B26',ytdGross,null,BLACK,false,'right','#,##0.00');
+        s(ws,'B27','',null,BLACK,false,'right');
+        s(ws,'C26',ytdDed,null,BLACK,false,'right','#,##0.00');
+        s(ws,'C27','',null,BLACK,false,'right');
+        ws.getCell('D26').value=ytdNet;
+        ws.getCell('D26').font={name:'Calibri',size:10,bold:true,color:{argb:ORANGE}};
+        ws.getCell('D26').alignment={horizontal:'right',vertical:'middle'};
+        ws.getCell('D26').border=thickBd(); ws.getCell('D26').numFmt='#,##0.00';
+        ws.getCell('D27').value=''; ws.getCell('D27').border=thickBd();
+        ['E26','F26','G26','H26','I26','J26','K26'].forEach(a=>s(ws,a,'',null,BLACK,false,'left'));
+        ['E27','F27','G27','H27','I27','J27','K27'].forEach(a=>s(ws,a,'',null,BLACK,false,'left'));
 
-        ws.getRow(22).height = 14;
-        ws.getRow(23).height = 14;
+        ws.getRow(26).height=14; ws.getRow(27).height=14;
+        ws.getRow(28).height=6;
 
-        // ── ROW 24-25: CURRENT ──
-        ws.mergeCells('A24:A25');
-        sc(ws.getCell('A24'), C_LGREY, C_BLACK, true, 'center', null, 'CURRENT');
-
-        ws.mergeCells('B24:B25');
-        sc(ws.getCell('B24'), null, C_BLACK, false, 'right', '#,##0.00', gross);
-
-        ws.mergeCells('C24:C25');
-        sc(ws.getCell('C24'), null, C_BLACK, false, 'right', '#,##0.00', cpp + ei + fedTax + provTax);
-
-        ws.mergeCells('D24:D25');
-        ws.getCell('D24').value     = net;
-        ws.getCell('D24').font      = { name:'Calibri', size:10, bold:true, color:{argb:'FFFF8C00'} };
-        ws.getCell('D24').alignment = aln('right');
-        ws.getCell('D24').border    = bdr();
-        ws.getCell('D24').numFmt    = '#,##0.00';
-
-        ws.mergeCells('E24:K25');
-        ws.getCell('E24').value     = `$    ${Number(net).toFixed(2)}    Manual Check was issued - Check Number XXXX`;
-        ws.getCell('E24').font      = font(C_BLACK, false, 9);
-        ws.getCell('E24').alignment = aln('left');
-        ws.getCell('E24').border    = bdr();
-
-        ws.getRow(24).height = 14;
-        ws.getRow(25).height = 14;
-
-        // ── ROW 26-27: YEAR TO DATE ──
-        ws.mergeCells('A26:A27');
-        sc(ws.getCell('A26'), C_LGREY, C_BLACK, true, 'center', null, 'YEAR TO DATE');
-
-        ws.mergeCells('B26:B27');
-        sc(ws.getCell('B26'), null, C_BLACK, false, 'right', '#,##0.00', ytdGross);
-
-        ws.mergeCells('C26:C27');
-        sc(ws.getCell('C26'), null, C_BLACK, false, 'right', '#,##0.00', ytdCpp + ytdEi + ytdFed + ytdProv);
-
-        ws.mergeCells('D26:D27');
-        ws.getCell('D26').value     = ytdNet;
-        ws.getCell('D26').font      = { name:'Calibri', size:10, bold:true, color:{argb:'FFFF8C00'} };
-        ws.getCell('D26').alignment = aln('right');
-        ws.getCell('D26').border    = bdr();
-        ws.getCell('D26').numFmt    = '#,##0.00';
-
-        ws.mergeCells('E26:K27');
-        ws.getCell('E26').border    = bdr();
-
-        ws.getRow(26).height = 14;
-        ws.getRow(27).height = 14;
-
-        // ── ROW 28: spacer ──
-        ws.getRow(28).height = 6;
-
-        // ── ROW 29: Employer footer ──
-        ws.mergeCells('A29:K29');
-        ws.getCell('A29').value     = `Employer: ${company?.bn||''} ${company?.name||''} - ${company?.address||''}`;
-        ws.getCell('A29').fill      = fill(C_LGREY);
-        ws.getCell('A29').font      = font(C_BLACK, false, 9);
-        ws.getCell('A29').alignment = aln('left');
-        ws.getCell('A29').border    = bdr();
-        ws.getRow(29).height        = 14;
-
-        prevSheet = sn;
+        // ROW 29: Footer
+        s(ws,'A29',`Employer: ${company?.bn||''} ${company?.name||''} - ${company?.address||''}`,LGREY,BLACK,false,'left');
+        ['B29','C29','D29','E29','F29','G29','H29','I29','J29','K29'].forEach(a=>s(ws,a,'',LGREY,BLACK,false,'left'));
+        ws.getRow(29).height=14;
       });
 
       const buf  = await wb.xlsx.writeBuffer();
