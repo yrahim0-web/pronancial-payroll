@@ -285,7 +285,10 @@ function calcPayroll(
   // Annualized ESTIMATE for the K2 tax credit (T4127 Method 1) — based on this
   // period's rate continuing all year, capped at the annual max. NOT the actual YTD total.
   const annualCPP         = Math.min(periodPensionable * CPP_RATE * PP, CPP_MAX_CONTRIB);
-  const annualCPPBase     = periodPensionable * CPP_BASE_RATE * PP;
+  // Base (legacy 4.95%) portion of the credit must scale off the ACTUAL capped
+  // contribution, not the uncapped annualized pensionable earnings — otherwise
+  // the credit overshoots once near/at the YMPE max.
+  const annualCPPBase     = annualCPP * (CPP_BASE_RATE / CPP_RATE);
 
   // CPP2: 4% on earnings between YMPE ($74,600) and YAMPE ($85,000)
   const annualPensionableForCPP2 = grossPeriod * PP;
