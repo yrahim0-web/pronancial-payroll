@@ -360,8 +360,8 @@ function calcPayroll(
     if      (ai <= 20000)  ohp = 0;
     else if (ai <= 36000)  ohp = Math.min(300,  0.06 * (ai - 20000));
     else if (ai <= 48000)  ohp = Math.min(450,  300 + 0.06 * (ai - 36000));
-    else if (ai <= 72000)  ohp = Math.min(600,  450 + 0.25 * (ai - 48000));
-    else if (ai <= 200000) ohp = Math.min(750,  600 + 0.25 * (ai - 72000));
+    else if (ai <= 72000)  ohp = Math.min(600,  450 + 0.06 * (ai - 48000));
+    else if (ai <= 200000) ohp = Math.min(750,  600 + 0.06 * (ai - 72000));
     else if (ai <= 200600) ohp = Math.min(900,  750 + 0.25 * (ai - 200000));
     else                   ohp = 900;
     annualProvTax += ohp;
