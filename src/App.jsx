@@ -335,7 +335,7 @@ function calcPayroll(
   const K3 = 0.14 * annualEI;
   // CEA applies to employment income only (base earnings × PP, not including vac pay)
   const annualBaseOnly = baseEarnings * PP;
-  const K4 = 0.14 * Math.min(annualBaseOnly, 1500);
+  const K4 = 0.14 * Math.min(annualBaseOnly, 1433);
   const annualFedTaxRaw = Math.max(T1 - K1 - K2 - K3 - K4, 0);
   const annualFedTax    = annualFedTaxRaw;
   const periodFedTax    = +Math.round(annualFedTax / PP * 100) / 100;
@@ -361,7 +361,7 @@ function calcPayroll(
     else if (ai <= 36000)  ohp = Math.min(300,  0.06 * (ai - 20000));
     else if (ai <= 48000)  ohp = Math.min(450,  300 + 0.06 * (ai - 36000));
     else if (ai <= 72000)  ohp = Math.min(600,  450 + 0.06 * (ai - 48000));
-    else if (ai <= 200000) ohp = Math.min(750,  600 + 0.06 * (ai - 72000));
+    else if (ai <= 200000) ohp = Math.min(900,  600 + 0.06 * (ai - 72000));
     else if (ai <= 200600) ohp = Math.min(900,  750 + 0.25 * (ai - 200000));
     else                   ohp = 900;
     annualProvTax += ohp;
