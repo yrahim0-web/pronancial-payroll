@@ -2651,9 +2651,7 @@ function PaystubsPage({ company }) {
       const PP = PAY_PERIODS[freq] || 24;
       const province = emp.province || "ON";
       const provData = PROV_TAX[province] || PROV_TAX["ON"];
-      const fedTD1 = emp.td1_fed || 16452;
-      const provTD1 = emp.td1_prov || provData.bpa;
-      const vacPct = parseFloat(String(emp.vac_rate || "4%").replace("%", "")) / 100 || 0.04;
+      const vacPct = parseFloat(String(emp.vac_rate || "4%").replace("%","")) / 100 || 0.04;
       const isSalary = emp.type === "Salary";
 
       const { data: allRuns } = await supabase
@@ -2667,237 +2665,326 @@ function PaystubsPage({ company }) {
       });
 
       const wb = new ExcelJS.Workbook();
-      const wsRates = wb.addWorksheet('Rates');
-      const ratesRows = [
-        ["Constant","Value"],
-        ["EMP_RATE", emp.rate||0], ["PP", PP], ["VAC_RATE", vacPct],
-        ["CPP_RATE",0.0595], ["CPP_BASE_RATE",0.0495], ["CPP_EXEMPTION",3500], ["CPP_MAX",4230.45],
-        ["CPP2_RATE",0.04], ["CPP2_MAX",416], ["EI_RATE",0.0163], ["EI_MAX",1123.07],
-        ["TD1_FED",fedTD1], ["PROV_BPA",provTD1], ["PROV_LOWEST_RATE",provData.brackets[0].rate],
-      ];
-      ratesRows.forEach(r => wsRates.addRow(r));
-      const R = {}; ratesRows.forEach((r,i)=>{ if(i>0) R[r[0]]=i+1; });
-      const RR = (name) => `Rates!$B$${R[name]}`;
 
-      const bracketFormula = (brackets, ref) => {
-        let f = `${brackets[brackets.length-1].base}+(${ref}-${brackets[brackets.length-1].min})*${brackets[brackets.length-1].rate}`;
-        for (let i = brackets.length-2; i >= 0; i--) {
-          f = `IF(${ref}<=${brackets[i].max},${brackets[i].base}+(${ref}-${brackets[i].min})*${brackets[i].rate},${f})`;
-        }
-        return f;
+      // ── Style constants ──
+      const C_DGREY  = 'FF595959';
+      const C_MGREY  = 'FF808080';
+      const C_LGREY  = 'FFC0C0C0';
+      const C_BLUE   = 'FF6495ED';
+      const C_WHITE  = 'FFFFFFFF';
+      const C_BLACK  = 'FF000000';
+      const C_TEAL   = 'FF008080';
+      const C_YELLOW = 'FFFFFF99';
+      const C_GREEN  = 'FF006400';
+      const C_DKGRN  = 'FF90EE90';
+
+      const fill = (argb) => ({ type:'pattern', pattern:'solid', fgColor:{argb} });
+      const bdr  = () => ({
+        top:   {style:'thin', color:{argb:'FF000000'}},
+        bottom:{style:'thin', color:{argb:'FF000000'}},
+        left:  {style:'thin', color:{argb:'FF000000'}},
+        right: {style:'thin', color:{argb:'FF000000'}},
+      });
+      const font = (color, bold, size) => ({ name:'Calibri', size:size||9, bold:!!bold, color:{argb:color||C_BLACK} });
+      const aln  = (h, wrap) => ({ horizontal:h||'left', vertical:'middle', wrapText:!!wrap });
+
+      const sc = (cell, fillArgb, fontColor, bold, alignH, numFmt, val) => {
+        if (val !== undefined) cell.value = val;
+        if (fillArgb) cell.fill = fill(fillArgb);
+        cell.font      = font(fontColor||C_BLACK, bold);
+        cell.alignment = aln(alignH||'left');
+        cell.border    = bdr();
+        if (numFmt) cell.numFmt = numFmt;
       };
 
       const openYtd = {
-        gross:+(emp.opening_ytd_gross||0), cpp:+(emp.opening_ytd_cpp||0), cpp2:+(emp.opening_ytd_cpp2||0),
-        ei:+(emp.opening_ytd_ei||0), fed:+(emp.opening_ytd_fed_tax||0), prov:+(emp.opening_ytd_prov_tax||0),
+        gross: +(emp.opening_ytd_gross||0),
+        cpp:   +(emp.opening_ytd_cpp||0),
+        cpp2:  +(emp.opening_ytd_cpp2||0),
+        ei:    +(emp.opening_ytd_ei||0),
+        fed:   +(emp.opening_ytd_fed_tax||0),
+        prov:  +(emp.opening_ytd_prov_tax||0),
+        vac:   +(emp.opening_ytd_vac||0),
+        erCpp: +(emp.opening_ytd_er_cpp||0),
+        erEi:  +(emp.opening_ytd_er_ei||0),
       };
-
-      // ── Style helpers ──
-      const DGREY  = 'FF404040';
-      const MGREY  = 'FF808080';
-      const LGREY  = 'FFC0C0C0';
-      const BLUE_N = 'FF6495ED';
-      const WHITE  = 'FFFFFFFF';
-      const TEAL   = 'FF008080';
-      const YELINP = 'FFFFFF99';
-
-      const hdrFill = (argb) => ({ type:'pattern', pattern:'solid', fgColor:{argb} });
-      const thinBdr = () => ({
-        top:{style:'thin',color:{argb:'FF000000'}},
-        bottom:{style:'thin',color:{argb:'FF000000'}},
-        left:{style:'thin',color:{argb:'FF000000'}},
-        right:{style:'thin',color:{argb:'FF000000'}},
-      });
-      const applyCell = (cell, fillArgb, fontColor, bold, alignH, numFmt, val) => {
-        if (val !== undefined) cell.value = val;
-        if (fillArgb) cell.fill = hdrFill(fillArgb);
-        cell.font = { name:'Calibri', size:9, bold:!!bold, color:{argb: fontColor||'FF000000'} };
-        cell.alignment = { horizontal: alignH||'left', vertical:'middle', wrapText: false };
-        cell.border = thinBdr();
-        if (numFmt) cell.numFmt = numFmt;
-      };
-      const f = (v) => ({ formula: v });
-      const blankCells = (ws, row, cols) => cols.forEach(c => applyCell(ws.getCell(`${c}${row}`), null, 'FF000000', false, 'left', null, ''));
 
       let prevSheet = null;
+
       periods.forEach((p) => {
-        const detail = runByPeriodNum[p.period];
-        const safeName = `P${p.period} ${p.start}`.replace(/[:\\/?*\[\]]/g, "").slice(0, 31);
-        const ws = wb.addWorksheet(safeName);
-        // Column widths: A=label, B=Hours, C=Rate, D=Amount, E=YTD, F=Type, G=Current, H=YTD, I=Type, J=Current, K=YTD
+        const det = runByPeriodNum[p.period];
+        const sn  = `P${p.period} ${p.start}`.replace(/[:\\/?*\[\]]/g,"").slice(0,31);
+        const ws  = wb.addWorksheet(sn);
+
+        // Column widths: A=14, B=9, C=9, D=11, E=13, F=13, G=11, H=13, I=10, J=11, K=13
         ws.columns = [
-          {width:14},{width:9},{width:10},{width:12},{width:13},
+          {width:14},{width:9},{width:9},{width:11},{width:14},
           {width:13},{width:12},{width:13},{width:10},{width:12},{width:13},
         ];
 
-// ── ROW 1: Name + period header ──
+        // ── ROW 1: Employee name + header info ──
         ws.getCell('A1').value = (emp.name||'').toUpperCase();
-        ws.getCell('A1').font = {name:'Calibri',size:10,bold:true};
-        ws.getCell('D1').value = 'Period:';
-        ws.getCell('D1').font = {name:'Calibri',size:9};
-        ws.getCell('E1').value = `${p.start} - ${p.end}`;
-        ws.getCell('E1').font = {name:'Calibri',size:9};
-        ws.getCell('G1').value = 'Pay Date:';
-        ws.getCell('G1').font = {name:'Calibri',size:9};
-        ws.getCell('H1').value = p.payDate;
-        ws.getCell('H1').font = {name:'Calibri',size:9,bold:true};
+        ws.getCell('A1').font  = font(C_BLACK, true, 10);
+        ws.getCell('C1').value = 'Employee #0001';
+        ws.getCell('F1').value = 'Department#02';
+        ws.getCell('G1').value = 'Period Start';
+        ws.getCell('H1').value = p.start;
+        ws.getCell('H1').font  = font(C_BLACK, false, 9);
+        ws.getCell('J1').value = 'Pay Day';
+        ws.getCell('K1').value = p.payDate;
+        ws.getCell('K1').font  = font(C_BLACK, false, 9);
 
-        // ── ROW 2: Province + frequency ──
-        ws.getCell('A2').value = 'Province:';
-        ws.getCell('B2').value = province;
-        ws.getCell('D2').value = 'Frequency:';
-        ws.getCell('E2').value = freq;
+        // ── ROW 2: SIN + period end ──
+        ws.getCell('A2').value = 'SIN';
+        ws.getCell('B2').value = (emp.sin || '5*******0');
+        ws.getCell('C2').value = 'Employee#0001';
+        ws.getCell('D2').value = 'Employer#0001';
+        ws.getCell('G2').value = 'Period End';
+        ws.getCell('H2').value = p.end;
 
-        // ── ROW 3: blank spacer ──
+        // ── ROW 3: Section header spans ──
+        ws.mergeCells('A3:E3');
+        sc(ws.getCell('A3'), C_DGREY, C_WHITE, true, 'center', null, 'Statement of Earnings');
 
-        // ── ROW 4: Input column headers ──
-        const r4 = [['B4','Reg Hrs'],['C4','OT Hrs'],['D4','Stat $'],['F4','Bonus $']];
-        r4.forEach(([addr,val]) => { ws.getCell(addr).value = val; ws.getCell(addr).font = {name:'Calibri',size:9,bold:true}; });
+        ws.mergeCells('F3:K3');
+        sc(ws.getCell('F3'), C_DGREY, C_WHITE, true, 'center', null, 'Employee Deductions and Employer Contributions');
 
-        // ── ROW 5: Input values (yellow) ──
-        const regHrsVal = detail ? +(detail.reg_hrs||0) : (isSalary ? 88 : 0);
-        const otHrsVal  = detail ? +(detail.ot_hrs||0)  : 0;
-        const statVal   = detail ? +(detail.stat_pay||0) : 0;
+        // ── ROW 4: Column sub-headers ──
+        [
+          ['A4','',       C_MGREY],
+          ['B4','HOURS',  C_MGREY],
+          ['C4','RATE',   C_MGREY],
+          ['D4','AMOUNT', C_MGREY],
+          ['E4','Y.T.D',  C_MGREY],
+          ['F4','TYPE',   C_MGREY],
+          ['G4','CURRENT',C_MGREY],
+          ['H4','Y.T.D',  C_MGREY],
+          ['I4','TYPE',   C_MGREY],
+          ['J4','CURRENT',C_MGREY],
+          ['K4','Y.T.D',  C_MGREY],
+        ].forEach(([addr, val, bg]) => sc(ws.getCell(addr), bg, C_WHITE, true, 'center', null, val));
 
-        ws.getCell('B5').value = regHrsVal;
-        ws.getCell('B5').fill = hdrFill(YELINP);
-        ws.getCell('B5').alignment = {horizontal:'right',vertical:'middle'};
-        ws.getCell('B5').border = thinBdr();
-        ws.getCell('C5').value = otHrsVal;
-        ws.getCell('C5').fill = hdrFill(YELINP);
-        ws.getCell('C5').alignment = {horizontal:'right',vertical:'middle'};
-        ws.getCell('C5').border = thinBdr();
-        ws.getCell('D5').value = statVal;
-        ws.getCell('D5').fill = hdrFill(YELINP);
-        ws.getCell('D5').alignment = {horizontal:'right',vertical:'middle'};
-        ws.getCell('D5').border = thinBdr();
-        ws.getCell('F5').value = 0;
-        ws.getCell('F5').fill = hdrFill(YELINP);
-        ws.getCell('F5').alignment = {horizontal:'right',vertical:'middle'};
-        ws.getCell('F5').border = thinBdr();
+        // ── Data values ──
+        const regHrs  = det ? +(det.reg_hrs||0)   : (isSalary ? 88 : 0);
+        const otHrs   = det ? +(det.ot_hrs||0)    : 0;
+        const statAmt = det ? +(det.stat_pay||0)  : 0;
+        const basePay = det ? +(det.base_earnings||0) : 0;
+        const otPay   = det ? +(det.ot_pay||0)    : 0;
+        const vacPay  = det ? +(det.vac_pay||0)   : 0;
+        const gross   = det ? +(det.gross||0)      : 0;
+        const cpp     = det ? +(det.cpp||0)        : 0;
+        const ei      = det ? +(det.ei||0)         : 0;
+        const fedTax  = det ? +(det.fed_tax||0)    : 0;
+        const provTax = det ? +(det.prov_tax||0)   : 0;
+        const net     = det ? +(det.net||0)        : 0;
+        const erCpp   = det ? +(det.er_cpp||0)     : 0;
+        const erEi    = det ? +(det.er_ei||0)      : 0;
 
-        // ── ROW 6: blank spacer ──
+        // YTD values
+        const ytdGross = det ? +(det.ytd_gross||0)    : 0;
+        const ytdCpp   = det ? +(det.ytd_cpp||0)      : 0;
+        const ytdEi    = det ? +(det.ytd_ei||0)       : 0;
+        const ytdFed   = det ? +(det.ytd_fed_tax||0)  : 0;
+        const ytdProv  = det ? +(det.ytd_prov_tax||0) : 0;
+        const ytdVac   = det ? +(det.ytd_vac||0)      : 0;
+        const ytdErCpp = det ? +(det.ytd_er_cpp||0)   : 0;
+        const ytdErEi  = det ? +(det.ytd_er_ei||0)    : 0;
+        const ytdBase  = det ? +(det.ytd_base_earnings||0) : 0;
+        const ytdNet   = ytdGross - ytdCpp - ytdEi - ytdFed - ytdProv;
 
-        // ── ROW 7: Column header bar (dark grey) ──
-        const r7heads = ['Base Pay','OT Pay','Vac Pay','Gross','CPP','CPP2','EI','Fed Tax','Prov Tax','Net Pay'];
-        r7heads.forEach((v,i) => {
-          const cell = ws.getCell(7, i+2); // cols B-K
-          applyCell(cell, DGREY, WHITE, true, 'center', null, v);
-        });
+        // ── ROW 5: SALARY / REGULAR ──
+        sc(ws.getCell('A5'), null, C_BLACK, false, 'left', null, isSalary ? 'SALARY' : 'REGULAR');
+        // Hours cell - yellow input
+        ws.getCell('B5').value = regHrs;
+        ws.getCell('B5').fill  = fill(C_YELLOW);
+        ws.getCell('B5').font  = font(C_BLACK, false, 9);
+        ws.getCell('B5').alignment = aln('right');
+        ws.getCell('B5').border    = bdr();
+        ws.getCell('B5').numFmt    = '#,##0.00';
+        // Rate
+        sc(ws.getCell('C5'), null, C_BLACK, false, 'right', null, `$${Number(emp.rate||0).toFixed(2)}`);
+        // Amount
+        sc(ws.getCell('D5'), null, C_BLACK, false, 'right', '#,##0.00', basePay);
+        // YTD base earnings - green highlight like Nitharjah format
+        ws.getCell('E5').value     = ytdBase;
+        ws.getCell('E5').fill      = fill(C_DKGRN);
+        ws.getCell('E5').font      = font(C_BLACK, false, 9);
+        ws.getCell('E5').alignment = aln('right');
+        ws.getCell('E5').border    = bdr();
+        ws.getCell('E5').numFmt    = '#,##0.00';
+        // FED.TAX
+        sc(ws.getCell('F5'), null, C_BLACK, false, 'left', null, 'FED.TAX');
+        sc(ws.getCell('G5'), null, C_BLACK, false, 'right', '#,##0.00', fedTax);
+        sc(ws.getCell('H5'), null, C_BLACK, false, 'right', '#,##0.00', ytdFed);
+        // Employer cols blank for fed tax row
+        sc(ws.getCell('I5'), null, C_BLACK, false, 'left',  null, '');
+        sc(ws.getCell('J5'), null, C_BLACK, false, 'right', '#,##0.00', 0);
+        sc(ws.getCell('K5'), null, C_BLACK, false, 'right', '#,##0.00', 0);
 
-        // ── ROW 8: Calculated values ──
-        const basePayF = isSalary ? `${RR('EMP_RATE')}/${RR('PP')}` : `B5*${RR('EMP_RATE')}`;
-        const otPayF   = isSalary ? `0` : `C5*${RR('EMP_RATE')}*1.5`;
-        const vacPayF  = `(B8+C8)*${RR('VAC_RATE')}`;
-        const grossF   = `B8+C8+D5+F5+D8`;
-
-        ws.getCell('B8').value = detail ? +(detail.base_earnings||0) : f(basePayF);
-        applyCell(ws.getCell('B8'), null, 'FF000000', false, 'right', '#,##0.00');
-        ws.getCell('C8').value = detail ? +(detail.ot_pay||0) : f(otPayF);
-        applyCell(ws.getCell('C8'), null, 'FF000000', false, 'right', '#,##0.00');
-        ws.getCell('D8').value = detail ? +(detail.vac_pay||0) : f(vacPayF);
-        applyCell(ws.getCell('D8'), null, 'FF4B0082', false, 'right', '#,##0.00'); // purple for vac
-        ws.getCell('E8').value = detail ? +(detail.gross||0) : f(grossF);
-        applyCell(ws.getCell('E8'), null, 'FF000000', true, 'right', '#,##0.00');
-
+        // ── ROW 6: SICK HRS ──
+        sc(ws.getCell('A6'), null, C_BLACK, false, 'left',  null,      'SICK HRS');
+        sc(ws.getCell('B6'), null, C_BLACK, false, 'right', null,      '');
+        sc(ws.getCell('C6'), null, C_BLACK, false, 'right', null,      '');
+        sc(ws.getCell('D6'), null, C_BLACK, false, 'right', '#,##0.00', 0);
+        // YTD sick = 0 but green highlight
+        ws.getCell('E6').value     = 0;
+        ws.getCell('E6').fill      = fill(C_DKGRN);
+        ws.getCell('E6').font      = font(C_BLACK, false, 9);
+        ws.getCell('E6').alignment = aln('right');
+        ws.getCell('E6').border    = bdr();
+        ws.getCell('E6').numFmt    = '#,##0.00';
         // CPP
-        const periodExemF    = `${RR('CPP_EXEMPTION')}/${RR('PP')}`;
-        const periodPensF    = `MAX(E8-${periodExemF},0)`;
-        const cppRoomF       = `MAX(${RR('CPP_MAX')}-${prevSheet?`'${prevSheet}'!J11`:openYtd.cpp},0)`;
-        const cppF           = `ROUND(MIN(${periodPensF}*${RR('CPP_RATE')},${cppRoomF}),2)`;
-        ws.getCell('F8').value = detail ? +(detail.cpp||0) : f(cppF);
-        applyCell(ws.getCell('F8'), null, 'FFCC0000', false, 'right', '#,##0.00');
+        sc(ws.getCell('F6'), null, C_BLACK, false, 'left',  null,      'CPP');
+        sc(ws.getCell('G6'), null, C_BLACK, false, 'right', '#,##0.00', cpp);
+        sc(ws.getCell('H6'), null, C_BLACK, false, 'right', '#,##0.00', ytdCpp);
+        sc(ws.getCell('I6'), null, C_BLACK, false, 'left',  null,      'CPP');
+        sc(ws.getCell('J6'), null, C_BLACK, false, 'right', '#,##0.00', erCpp);
+        sc(ws.getCell('K6'), null, C_BLACK, false, 'right', '#,##0.00', ytdErCpp);
 
-        // CPP2
-        const cpp1NeedF      = `${periodPensF}*${RR('CPP_RATE')}`;
-        const pensCappedF    = `${cppRoomF}/${RR('CPP_RATE')}`;
-        const excessPensF    = `MAX(${periodPensF}-${pensCappedF},0)`;
-        const cpp2RoomF      = `MAX(${RR('CPP2_MAX')}-${prevSheet?`'${prevSheet}'!K11`:openYtd.cpp2},0)`;
-        const cpp2F          = `IF(${cpp1NeedF}>${cppRoomF},ROUND(MIN(${excessPensF}*${RR('CPP2_RATE')},${cpp2RoomF}),2),0)`;
-        ws.getCell('G8').value = detail ? +(detail.cpp2||0) : f(cpp2F);
-        applyCell(ws.getCell('G8'), null, 'FFCC0000', false, 'right', '#,##0.00');
-
+        // ── ROW 7: STAT ──
+        ws.getCell('A7').value     = 'STAT';
+        ws.getCell('A7').font      = font(C_TEAL, false, 9);
+        ws.getCell('A7').alignment = aln('left');
+        ws.getCell('A7').border    = bdr();
+        sc(ws.getCell('B7'), null, C_BLACK, false, 'right', null,       '');
+        sc(ws.getCell('C7'), null, C_BLACK, false, 'right', null,       '');
+        sc(ws.getCell('D7'), null, C_BLACK, false, 'right', '#,##0.00', statAmt);
+        sc(ws.getCell('E7'), null, C_BLACK, false, 'right', '#,##0.00', 0);
         // EI
-        const eiRoomF        = `MAX(${RR('EI_MAX')}-${prevSheet?`'${prevSheet}'!L11`:openYtd.ei},0)`;
-        const eiF            = `ROUND(MIN(E8*${RR('EI_RATE')},${eiRoomF}),2)`;
-        ws.getCell('H8').value = detail ? +(detail.ei||0) : f(eiF);
-        applyCell(ws.getCell('H8'), null, 'FFCC0000', false, 'right', '#,##0.00');
+        sc(ws.getCell('F7'), null, C_BLACK, false, 'left',  null,      'EI');
+        sc(ws.getCell('G7'), null, C_BLACK, false, 'right', '#,##0.00', ei);
+        sc(ws.getCell('H7'), null, C_BLACK, false, 'right', '#,##0.00', ytdEi);
+        sc(ws.getCell('I7'), null, C_BLACK, false, 'left',  null,      'EI');
+        sc(ws.getCell('J7'), null, C_BLACK, false, 'right', '#,##0.00', erEi);
+        sc(ws.getCell('K7'), null, C_BLACK, false, 'right', '#,##0.00', ytdErEi);
 
-        // Fed Tax
-        const annualCPPF     = `MIN(${periodPensF}*${RR('CPP_RATE')}*${RR('PP')},${RR('CPP_MAX')})`;
-        const annualCPPBaseF = `${annualCPPF}*(${RR('CPP_BASE_RATE')}/${RR('CPP_RATE')})`;
-        const annualEIF      = `MIN(E8*${RR('PP')}*${RR('EI_RATE')},${RR('EI_MAX')})`;
-        const cppEnhF        = `MAX(${periodPensF}*(${RR('CPP_RATE')}-${RR('CPP_BASE_RATE')}),0)`;
-        const annualTaxF     = `E8*${RR('PP')}-(${cppEnhF}+G8)*${RR('PP')}`;
-        const bpafF          = `IF(E8*${RR('PP')}<=181440,16452,IF(E8*${RR('PP')}>=258482,14829,16452-(16452-14829)*(E8*${RR('PP')}-181440)/(258482-181440)))`;
-        const T1F            = bracketFormula(FED_BRACKETS, annualTaxF);
-        const K1F=`0.14*${bpafF}`, K2F=`0.14*${annualCPPBaseF}`, K3F=`0.14*${annualEIF}`, K4F=`0.14*MIN(B8*${RR('PP')},1500)`;
-        const fedTaxF        = `ROUND(MAX(${T1F}-${K1F}-${K2F}-${K3F}-${K4F},0)/${RR('PP')},2)`;
-        ws.getCell('I8').value = detail ? +(detail.fed_tax||0) : f(fedTaxF);
-        applyCell(ws.getCell('I8'), null, 'FFFF6600', false, 'right', '#,##0.00');
+        // ── ROW 8: OT row (if hourly) / blank (if salary) ──
+        sc(ws.getCell('A8'), null, C_BLACK, false, 'left', null, otHrs > 0 ? 'OT PAY' : '');
+        sc(ws.getCell('B8'), null, C_BLACK, false, 'right', null, otHrs > 0 ? otHrs : '');
+        sc(ws.getCell('C8'), null, C_BLACK, false, 'right', null, '');
+        sc(ws.getCell('D8'), null, C_BLACK, false, 'right', '#,##0.00', otPay);
+        sc(ws.getCell('E8'), null, C_BLACK, false, 'right', '#,##0.00', 0);
+        ['F8','G8','H8','I8','J8','K8'].forEach(a => sc(ws.getCell(a), null, C_BLACK, false, 'left', null, ''));
 
-        // Prov Tax
-        const TprovF         = bracketFormula(provData.brackets, annualTaxF);
-        const provBpaRate    = `${RR('PROV_LOWEST_RATE')}`;
-        const provCredF      = `(${RR('PROV_BPA')}+${annualCPPBaseF}+${annualEIF})*${provBpaRate}`;
-        let provTaxExpr      = `MAX(${TprovF}-${provCredF},0)`;
-        if (provData.surtax) provTaxExpr = `(${provTaxExpr})+MAX((${provTaxExpr})-5818,0)*0.2+MAX((${provTaxExpr})-7446,0)*0.36`;
-        if (province==='ON') {
-          const ag=`E8*${RR('PP')}`;
-          provTaxExpr=`(${provTaxExpr})+IF(${ag}<=20000,0,IF(${ag}<=25000,MIN(300,0.06*(${ag}-20000)),IF(${ag}<=36000,300,IF(${ag}<=38500,MIN(450,300+0.06*(${ag}-36000)),IF(${ag}<=48000,450,IF(${ag}<=48600,MIN(600,450+0.25*(${ag}-48000)),IF(${ag}<=72000,600,IF(${ag}<=72600,MIN(750,600+0.25*(${ag}-72000)),IF(${ag}<=200000,750,IF(${ag}<=200600,MIN(900,750+0.25*(${ag}-200000)),900))))))))))`;
+        // ── ROW 9: VAC.PAY ──
+        sc(ws.getCell('A9'), null, C_BLACK, false, 'left',  null,      'VAC.PAY');
+        sc(ws.getCell('B9'), null, C_BLACK, false, 'right', null,      '0.0');
+        sc(ws.getCell('C9'), null, C_BLACK, false, 'right', null,      `${Math.round(vacPct*100)}%`);
+        sc(ws.getCell('D9'), null, C_BLACK, false, 'right', '#,##0.00', vacPay);
+        sc(ws.getCell('E9'), null, C_BLACK, false, 'right', '#,##0.00', ytdVac);
+        ['F9','G9','H9','I9','J9','K9'].forEach(a => sc(ws.getCell(a), null, C_BLACK, false, 'left', null, ''));
+
+        // ── ROWS 10-20: Empty rows with borders ──
+        for (let r = 10; r <= 20; r++) {
+          ['A','B','C','D','E','F','G','H','I','J','K'].forEach(col => {
+            const cell = ws.getCell(`${col}${r}`);
+            cell.value  = '';
+            cell.border = bdr();
+          });
         }
-        const provTaxF       = `ROUND((${provTaxExpr})/${RR('PP')},2)`;
-        ws.getCell('J8').value = detail ? +(detail.prov_tax||0) : f(provTaxF);
-        applyCell(ws.getCell('J8'), null, 'FFFF69B4', false, 'right', '#,##0.00');
 
-        // Net Pay
-        ws.getCell('K8').value = detail ? +(detail.net||0) : f(`E8-F8-G8-H8-I8-J8`);
-        applyCell(ws.getCell('K8'), null, 'FF006400', true, 'right', '#,##0.00');
+        // ── ROW 21: Spacer (no border) ──
+        ws.getRow(21).height = 8;
 
-        // ── ROW 9: blank spacer ──
+        // ── ROW 22-23: SUMMARY header (merged rows) ──
+        ws.mergeCells('A22:A23');
+        sc(ws.getCell('A22'), C_DGREY, C_WHITE, true, 'center', null, 'SUMMARY');
 
-        // ── ROW 10: YTD headers ──
-        const r10heads = ['YTD Gross','YTD CPP','YTD CPP2','YTD EI','YTD Fed','YTD Prov','YTD Net'];
-        r10heads.forEach((v,i) => {
-          const cell = ws.getCell(10, i+5); // cols E-K
-          applyCell(cell, MGREY, WHITE, true, 'center', null, v);
-        });
+        ws.mergeCells('B22:B23');
+        ws.getCell('B22').value     = 'GROSS\nPAY';
+        ws.getCell('B22').fill      = fill(C_DGREY);
+        ws.getCell('B22').font      = font(C_WHITE, true, 9);
+        ws.getCell('B22').alignment = { horizontal:'center', vertical:'middle', wrapText:true };
+        ws.getCell('B22').border    = bdr();
 
-        // ── ROW 11: YTD values ──
-        const prevG  = prevSheet ? `'${prevSheet}'!E11+E8`  : `${openYtd.gross}+E8`;
-        const prevC  = prevSheet ? `'${prevSheet}'!F11+F8`  : `${openYtd.cpp}+F8`;
-        const prevC2 = prevSheet ? `'${prevSheet}'!G11+G8`  : `${openYtd.cpp2}+G8`;
-        const prevE  = prevSheet ? `'${prevSheet}'!H11+H8`  : `${openYtd.ei}+H8`;
-        const prevFd = prevSheet ? `'${prevSheet}'!I11+I8`  : `${openYtd.fed}+I8`;
-        const prevPv = prevSheet ? `'${prevSheet}'!J11+J8`  : `${openYtd.prov}+J8`;
+        ws.mergeCells('C22:C23');
+        sc(ws.getCell('C22'), C_DGREY, C_WHITE, true, 'center', null, 'DEDUCTIONS');
 
-        ws.getCell('E11').value = detail ? +(detail.ytd_gross||0)    : f(prevG);
-        applyCell(ws.getCell('E11'), null, 'FF000000', false, 'right', '#,##0.00');
-        ws.getCell('F11').value = detail ? +(detail.ytd_cpp||0)      : f(prevC);
-        applyCell(ws.getCell('F11'), null, 'FF000000', false, 'right', '#,##0.00');
-        ws.getCell('G11').value = detail ? +(detail.ytd_cpp2||0)     : f(prevC2);
-        applyCell(ws.getCell('G11'), null, 'FF000000', false, 'right', '#,##0.00');
-        ws.getCell('H11').value = detail ? +(detail.ytd_ei||0)       : f(prevE);
-        applyCell(ws.getCell('H11'), null, 'FF000000', false, 'right', '#,##0.00');
-        ws.getCell('I11').value = detail ? +(detail.ytd_fed_tax||0)  : f(prevFd);
-        applyCell(ws.getCell('I11'), null, 'FF000000', false, 'right', '#,##0.00');
-        ws.getCell('J11').value = detail ? +(detail.ytd_prov_tax||0) : f(prevPv);
-        applyCell(ws.getCell('J11'), null, 'FF000000', false, 'right', '#,##0.00');
-        ws.getCell('K11').value = detail
-          ? +((+(detail.ytd_gross||0))-(+(detail.ytd_cpp||0))-(+(detail.ytd_cpp2||0))-(+(detail.ytd_ei||0))-(+(detail.ytd_fed_tax||0))-(+(detail.ytd_prov_tax||0)))
-          : f(`E11-F11-G11-H11-I11-J11`);
-        applyCell(ws.getCell('K11'), null, 'FF006400', true, 'right', '#,##0.00');
+        ws.mergeCells('D22:D23');
+        sc(ws.getCell('D22'), C_BLUE, C_WHITE, true, 'center', null, 'NET PAY');
 
-        prevSheet = safeName;
+        ws.mergeCells('E22:K23');
+        sc(ws.getCell('E22'), C_DGREY, C_WHITE, true, 'center', null, 'NET PAY ALLOCATION');
+
+        ws.getRow(22).height = 14;
+        ws.getRow(23).height = 14;
+
+        // ── ROW 24-25: CURRENT ──
+        ws.mergeCells('A24:A25');
+        sc(ws.getCell('A24'), C_LGREY, C_BLACK, true, 'center', null, 'CURRENT');
+
+        ws.mergeCells('B24:B25');
+        sc(ws.getCell('B24'), null, C_BLACK, false, 'right', '#,##0.00', gross);
+
+        ws.mergeCells('C24:C25');
+        sc(ws.getCell('C24'), null, C_BLACK, false, 'right', '#,##0.00', cpp + ei + fedTax + provTax);
+
+        ws.mergeCells('D24:D25');
+        ws.getCell('D24').value     = net;
+        ws.getCell('D24').fill      = fill('00000000'); // no fill
+        ws.getCell('D24').font      = { name:'Calibri', size:10, bold:true, color:{argb:'FFFF8C00'} };
+        ws.getCell('D24').alignment = aln('right');
+        ws.getCell('D24').border    = bdr();
+        ws.getCell('D24').numFmt    = '#,##0.00';
+
+        ws.mergeCells('E24:K25');
+        ws.getCell('E24').value     = `$    ${Number(net).toFixed(2)}    Manual Check was issued - Check Number XXXX`;
+        ws.getCell('E24').font      = font(C_BLACK, false, 9);
+        ws.getCell('E24').alignment = aln('left');
+        ws.getCell('E24').border    = bdr();
+
+        ws.getRow(24).height = 14;
+        ws.getRow(25).height = 14;
+
+        // ── ROW 26-27: YEAR TO DATE ──
+        ws.mergeCells('A26:A27');
+        sc(ws.getCell('A26'), C_LGREY, C_BLACK, true, 'center', null, 'YEAR TO DATE');
+
+        ws.mergeCells('B26:B27');
+        sc(ws.getCell('B26'), null, C_BLACK, false, 'right', '#,##0.00', ytdGross);
+
+        ws.mergeCells('C26:C27');
+        sc(ws.getCell('C26'), null, C_BLACK, false, 'right', '#,##0.00', ytdCpp + ytdEi + ytdFed + ytdProv);
+
+        ws.mergeCells('D26:D27');
+        ws.getCell('D26').value     = ytdNet;
+        ws.getCell('D26').font      = { name:'Calibri', size:10, bold:true, color:{argb:'FFFF8C00'} };
+        ws.getCell('D26').alignment = aln('right');
+        ws.getCell('D26').border    = bdr();
+        ws.getCell('D26').numFmt    = '#,##0.00';
+
+        ws.mergeCells('E26:K27');
+        ws.getCell('E26').border    = bdr();
+
+        ws.getRow(26).height = 14;
+        ws.getRow(27).height = 14;
+
+        // ── ROW 28: spacer ──
+        ws.getRow(28).height = 6;
+
+        // ── ROW 29: Employer footer ──
+        ws.mergeCells('A29:K29');
+        ws.getCell('A29').value     = `Employer: ${company?.bn||''} ${company?.name||''} - ${company?.address||''}`;
+        ws.getCell('A29').fill      = fill(C_LGREY);
+        ws.getCell('A29').font      = font(C_BLACK, false, 9);
+        ws.getCell('A29').alignment = aln('left');
+        ws.getCell('A29').border    = bdr();
+        ws.getRow(29).height        = 14;
+
+        prevSheet = sn;
       });
 
-      const buf = await wb.xlsx.writeBuffer();
-      const blob = new Blob([buf], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `${emp.name.replace(/\s+/g,'_')}_Paystubs_${new Date().getFullYear()}.xlsx`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-    } catch (err) {
+      const buf  = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type:'application/octet-stream' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `${emp.name.replace(/\s+/g,'_')}_Paystubs_${new Date().getFullYear()}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch(err) {
       alert('Export failed: ' + err.message);
     }
     setExportingExcel(null);
