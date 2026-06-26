@@ -2786,7 +2786,7 @@ function PaystubsPage({ company }) {
         [regC,otC,statC,bonC].forEach(inputFill);
 
         const E=L(col['Reg Hrs (Input)']), F=L(col['OT Hrs (Input)']), G=L(col['Stat Pay $ (Input)']), H=L(col['Bonus $ (Input)']);
-        const I=L(col['Base Pay']), J=L(col['OT Pay']), K=L(col['Vacationable Earn']), M=L(col['Employment Earn']), N=L(col['Vac Pay']);
+        const I=L(col['Base Pay']), J=L(col['OT Pay']), VacEarn=L(col['Vacationable Earn']), EmpEarn=L(col['Employment Earn']), N=L(col['Vac Pay']);
         const Gr=L(col['Gross']), PenL=L(col['Period Pensionable']), RoomL=L(col['CPP1 Room Left']);
         const Cpp1L=L(col['CPP1']), YtdCpp1L=L(col['YTD CPP1']), ExcessL=L(col['Excess Pensionable']);
         const Cpp2RoomL=L(col['CPP2 Room Left']), Cpp2L=L(col['CPP2']), YtdCpp2L=L(col['YTD CPP2']);
@@ -2803,8 +2803,8 @@ function PaystubsPage({ company }) {
         dataRow.getCell(col['OT Pay']).value = isSal ? 0 : { formula: `${F}${r}*${C(17)}*1.5` };
         dataRow.getCell(col['Vacationable Earn']).value = { formula: `${I}${r}+${J}${r}` };
         dataRow.getCell(col['Employment Earn']).value   = { formula: `${I}${r}+${J}${r}+${G}${r}+${H}${r}` };
-        dataRow.getCell(col['Vac Pay']).value            = { formula: `${K}${r}*${C(16)}` };
-        dataRow.getCell(col['Gross']).value              = { formula: `${M}${r}+${N}${r}` };
+        dataRow.getCell(col['Vac Pay']).value            = { formula: `${VacEarn}${r}*${C(16)}` };
+        dataRow.getCell(col['Gross']).value              = { formula: `${EmpEarn}${r}+${N}${r}` };
 
         dataRow.getCell(col['Period Pensionable']).value = { formula: `MAX(${Gr}${r}-${C(4)}/${C(15)},0)` };
         dataRow.getCell(col['CPP1 Room Left']).value     = { formula: `MAX(${C(3)}-${YtdCpp1L}${pr},0)` };
@@ -2855,7 +2855,7 @@ function PaystubsPage({ company }) {
 
         const provBeforeSurtax = `MAX(${ProvBrL}${r}-${ProvCrL}${r},0)`;
         dataRow.getCell(col['Prov Tax+Surtax']).value = { formula:
-          `${provBeforeSurtax}+IF(${provBeforeSurtax}>5818,(${provBeforeSurtax}-5818)*0.2,0)+IF(${provBeforeSurtax}>7446,(${provBeforeSurtax}-7446)*0.36,0)`
+          `${provBeforeSurtax}+IF((${provBeforeSurtax})>5818,((${provBeforeSurtax})-5818)*0.2,0)+IF((${provBeforeSurtax})>7446,((${provBeforeSurtax})-7446)*0.36,0)`
         };
 
         const ohpFormula = buildNestedIF([
