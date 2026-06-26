@@ -2802,7 +2802,7 @@ function PaystubsPage({ company }) {
         dataRow.getCell(col['OT Pay']).value = isSal ? 0 : { formula: `${F}${r}*${C(17)}*1.5` };
         dataRow.getCell(col['Vacationable Earn']).value = { formula: `${I}${r}+${J}${r}` };
         dataRow.getCell(col['Employment Earn']).value   = { formula: `${I}${r}+${J}${r}+${G}${r}+${H}${r}` };
-        dataRow.getCell(col['Vac Pay']).value            = { formula: `${K}${r}*${C(18)}` };
+        dataRow.getCell(col['Vac Pay']).value            = { formula: `${K}${r}*${C(16)}` };
         dataRow.getCell(col['Gross']).value              = { formula: `${M}${r}+${N}${r}` };
 
         dataRow.getCell(col['Period Pensionable']).value = { formula: `MAX(${Gr}${r}-${C(4)}/${C(15)},0)` };
@@ -2853,9 +2853,8 @@ function PaystubsPage({ company }) {
         dataRow.getCell(col['Prov Bracket Tax']).value = { formula: provBracketFormula };
 
         const provBeforeSurtax = `MAX(${ProvBrL}${r}-${ProvCrL}${r},0)`;
-        const PS = `${ProvSurL}${r}`;
         dataRow.getCell(col['Prov Tax+Surtax']).value = { formula:
-          `_xlfn.LET(pbt,${provBeforeSurtax},pbt+IF(pbt>5818,(pbt-5818)*0.2,0)+IF(pbt>7446,(pbt-7446)*0.36,0))`
+          `${provBeforeSurtax}+IF(${provBeforeSurtax}>5818,(${provBeforeSurtax}-5818)*0.2,0)+IF(${provBeforeSurtax}>7446,(${provBeforeSurtax}-7446)*0.36,0)`
         };
 
         const ohpFormula = buildNestedIF([
