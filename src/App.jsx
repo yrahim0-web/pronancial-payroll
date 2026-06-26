@@ -2931,6 +2931,7 @@ function PaystubsPage({ company }) {
         const dataR = idx + 3;
         const DR = `PayrollData!`;
         const sn = `P${p.period} ${p.start}`.replace(/[:\\/?*\[\]]/g,'').slice(0,31);
+        const det = byPeriod[p.period];
         const ws = wb.addWorksheet(sn);
 
         ws.columns = [
