@@ -2969,7 +2969,7 @@ function PaystubsPage({ company }) {
         sc(ws,'A5',isSal?'SALARY':'REGULAR',null,BLACK,false,'left');
         const hrsCell = ws.getCell('B5');
         hrsCell.value = { formula: G2('Reg Hrs (Input)') };
-        hrsCell.fill = fl(YELL); hrsCell.font={name:'Calibri',size:9,color:{argb:'FF0000FF'}};
+        hrsCell.fill = fl(LGRN); hrsCell.font={name:'Calibri',size:9,color:{argb:BLACK}}; hrsCell.protection = {locked:true};
         hrsCell.alignment={horizontal:'right',vertical:'middle'}; hrsCell.border=bd(); hrsCell.numFmt='#,##0.00';
         sc(ws,'C5',`$${Number(emp.rate||0).toFixed(2)}`,null,BLACK,false,'right');
         sc(ws,'D5',{formula:G2('Base Pay')},null,BLACK,false,'right','#,##0.00');
@@ -2987,7 +2987,7 @@ function PaystubsPage({ company }) {
         sc(ws,'A6','OT PAY',null,BLACK,false,'left');
         const otCell = ws.getCell('B6');
         otCell.value = { formula: G2('OT Hrs (Input)') };
-        otCell.fill = fl(YELL); otCell.font={name:'Calibri',size:9,color:{argb:'FF0000FF'}};
+        otCell.fill = fl(LGRN); otCell.font={name:'Calibri',size:9,color:{argb:BLACK}}; otCell.protection = {locked:true};
         otCell.alignment={horizontal:'right',vertical:'middle'}; otCell.border=bd(); otCell.numFmt='#,##0.00';
         sc(ws,'C6','1.5x',null,BLACK,false,'right');
         sc(ws,'D6',{formula:G2('OT Pay')},null,BLACK,false,'right','#,##0.00');
@@ -3003,7 +3003,7 @@ function PaystubsPage({ company }) {
         a7.font={name:'Calibri',size:9,color:{argb:TEAL}}; a7.alignment={horizontal:'left',vertical:'middle'}; a7.border=bd();
         const statCell = ws.getCell('B7');
         statCell.value = { formula: G2('Stat Pay $ (Input)') };
-        statCell.fill = fl(YELL); statCell.font={name:'Calibri',size:9,color:{argb:'FF0000FF'}};
+        statCell.fill = fl(LGRN); statCell.font={name:'Calibri',size:9,color:{argb:BLACK}}; statCell.protection = {locked:true};
         statCell.alignment={horizontal:'right',vertical:'middle'}; statCell.border=bd(); statCell.numFmt='#,##0.00';
         sc(ws,'C7','$ amt',null,BLACK,false,'right');
         sc(ws,'D7',{formula:G2('Stat Pay $ (Input)')},null,BLACK,false,'right','#,##0.00');
@@ -3018,7 +3018,7 @@ function PaystubsPage({ company }) {
         sc(ws,'A8','BONUS',null,BLACK,false,'left');
         const bonCell = ws.getCell('B8');
         bonCell.value = { formula: G2('Bonus $ (Input)') };
-        bonCell.fill = fl(YELL); bonCell.font={name:'Calibri',size:9,color:{argb:'FF0000FF'}};
+        bonCell.fill = fl(LGRN); bonCell.font={name:'Calibri',size:9,color:{argb:BLACK}}; bonCell.protection = {locked:true};
         bonCell.alignment={horizontal:'right',vertical:'middle'}; bonCell.border=bd(); bonCell.numFmt='#,##0.00';
         sc(ws,'C8','$ amt',null,BLACK,false,'right');
         sc(ws,'D8',{formula:G2('Bonus $ (Input)')},null,BLACK,false,'right','#,##0.00');
