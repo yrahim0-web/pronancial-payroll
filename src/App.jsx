@@ -2932,6 +2932,7 @@ function PaystubsPage({ company }) {
           {width:13},{width:12},{width:13},{width:10},{width:12},{width:13},
         ];
         for (let rr=1; rr<=30; rr++) ws.getRow(rr).height = 14;
+        ws.protect('', { selectLockedCells: true, selectUnlockedCells: true });
 
         const G2 = (colName) => `${DR}${L(col[colName])}${dataR}`;
 
