@@ -2797,6 +2797,7 @@ function PaystubsPage({ company }) {
         const ProvCrL=L(col['Prov Credits']), ProvBrL=L(col['Prov Bracket Tax']), ProvSurL=L(col['Prov Tax+Surtax']);
         const OhpL=L(col['OHP']), ProvOhpL=L(col['Prov Tax+OHP']), OnRedL=L(col['ON Tax Reduction']), ProvFinL=L(col['Prov Tax Final']), ProvTaxL=L(col['Prov Tax']);
 
+        const sn = `P${p.period} ${p.start}`.replace(/[:\\/?*\[\]]/g,'').slice(0,31);
         const pSht = `'${sn}'!`;
         dataRow.getCell(col['Reg Hrs (Input)']).value = { formula: `${pSht}B5` };
         dataRow.getCell(col['OT Hrs (Input)']).value  = { formula: `${pSht}B6` };
