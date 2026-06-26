@@ -2656,6 +2656,7 @@ function PaystubsPage({ company }) {
     try {
       const ExcelJS = (await import('exceljs')).default;
       const wb = new ExcelJS.Workbook();
+      wb.calcProperties.fullCalcOnLoad = true;
       const L = colLetter;
 
       const freq        = emp.payroll_schedule || 'Bi-weekly';
