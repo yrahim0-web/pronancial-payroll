@@ -2797,6 +2797,11 @@ function PaystubsPage({ company }) {
         const ProvCrL=L(col['Prov Credits']), ProvBrL=L(col['Prov Bracket Tax']), ProvSurL=L(col['Prov Tax+Surtax']);
         const OhpL=L(col['OHP']), ProvOhpL=L(col['Prov Tax+OHP']), OnRedL=L(col['ON Tax Reduction']), ProvFinL=L(col['Prov Tax Final']), ProvTaxL=L(col['Prov Tax']);
 
+        const pSht = `'${sn}'!`;
+        dataRow.getCell(col['Reg Hrs (Input)']).value = { formula: `${pSht}B5` };
+        dataRow.getCell(col['OT Hrs (Input)']).value  = { formula: `${pSht}B6` };
+        dataRow.getCell(col['Stat Pay $ (Input)']).value = { formula: `${pSht}B7` };
+        dataRow.getCell(col['Bonus $ (Input)']).value    = { formula: `${pSht}B8` };
         dataRow.getCell(col['Base Pay']).value = isSal
           ? { formula: `${C(17)}/${C(15)}` }
           : { formula: `${E}${r}*${C(17)}` };
@@ -2969,8 +2974,8 @@ function PaystubsPage({ company }) {
 
         sc(ws,'A5',isSal?'SALARY':'REGULAR',null,BLACK,false,'left');
         const hrsCell = ws.getCell('B5');
-        hrsCell.value = { formula: G2('Reg Hrs (Input)') };
-        hrsCell.fill = fl(LGRN); hrsCell.font={name:'Calibri',size:9,color:{argb:BLACK}}; hrsCell.protection = {locked:true};
+        hrsCell.value = det ? (parseFloat(det.reg_hrs)||0) : 0;
+        hrsCell.fill = fl(YELL); hrsCell.font={name:'Calibri',size:9,color:{argb:'FF0000FF'}};
         hrsCell.alignment={horizontal:'right',vertical:'middle'}; hrsCell.border=bd(); hrsCell.numFmt='#,##0.00';
         sc(ws,'C5',`$${Number(emp.rate||0).toFixed(2)}`,null,BLACK,false,'right');
         sc(ws,'D5',{formula:G2('Base Pay')},null,BLACK,false,'right','#,##0.00');
@@ -2987,8 +2992,8 @@ function PaystubsPage({ company }) {
 
         sc(ws,'A6','OT PAY',null,BLACK,false,'left');
         const otCell = ws.getCell('B6');
-        otCell.value = { formula: G2('OT Hrs (Input)') };
-        otCell.fill = fl(LGRN); otCell.font={name:'Calibri',size:9,color:{argb:BLACK}}; otCell.protection = {locked:true};
+        otCell.value = det ? (parseFloat(det.ot_hrs)||0) : 0;
+        otCell.fill = fl(YELL); otCell.font={name:'Calibri',size:9,color:{argb:'FF0000FF'}};
         otCell.alignment={horizontal:'right',vertical:'middle'}; otCell.border=bd(); otCell.numFmt='#,##0.00';
         sc(ws,'C6','1.5x',null,BLACK,false,'right');
         sc(ws,'D6',{formula:G2('OT Pay')},null,BLACK,false,'right','#,##0.00');
@@ -3003,8 +3008,8 @@ function PaystubsPage({ company }) {
         const a7=ws.getCell('A7'); a7.value='STAT';
         a7.font={name:'Calibri',size:9,color:{argb:TEAL}}; a7.alignment={horizontal:'left',vertical:'middle'}; a7.border=bd();
         const statCell = ws.getCell('B7');
-        statCell.value = { formula: G2('Stat Pay $ (Input)') };
-        statCell.fill = fl(LGRN); statCell.font={name:'Calibri',size:9,color:{argb:BLACK}}; statCell.protection = {locked:true};
+        statCell.value = det ? (parseFloat(det.stat_pay||det.stat||0)||0) : 0;
+        statCell.fill = fl(YELL); statCell.font={name:'Calibri',size:9,color:{argb:'FF0000FF'}};
         statCell.alignment={horizontal:'right',vertical:'middle'}; statCell.border=bd(); statCell.numFmt='#,##0.00';
         sc(ws,'C7','$ amt',null,BLACK,false,'right');
         sc(ws,'D7',{formula:G2('Stat Pay $ (Input)')},null,BLACK,false,'right','#,##0.00');
@@ -3018,8 +3023,8 @@ function PaystubsPage({ company }) {
 
         sc(ws,'A8','BONUS',null,BLACK,false,'left');
         const bonCell = ws.getCell('B8');
-        bonCell.value = { formula: G2('Bonus $ (Input)') };
-        bonCell.fill = fl(LGRN); bonCell.font={name:'Calibri',size:9,color:{argb:BLACK}}; bonCell.protection = {locked:true};
+        bonCell.value = det ? (parseFloat(det.bon||det.bonus||0)||0) : 0;
+        bonCell.fill = fl(YELL); bonCell.font={name:'Calibri',size:9,color:{argb:'FF0000FF'}};
         bonCell.alignment={horizontal:'right',vertical:'middle'}; bonCell.border=bd(); bonCell.numFmt='#,##0.00';
         sc(ws,'C8','$ amt',null,BLACK,false,'right');
         sc(ws,'D8',{formula:G2('Bonus $ (Input)')},null,BLACK,false,'right','#,##0.00');
