@@ -2776,10 +2776,10 @@ function PaystubsPage({ company }) {
         const statC = dataRow.getCell(col['Stat Pay $ (Input)']);
         const bonC  = dataRow.getCell(col['Bonus $ (Input)']);
         if (det) {
-          regC.value  = +(det.reg_hrs||0);
-          otC.value   = +(det.ot_hrs||0);
-          statC.value = +(det.stat_pay||0);
-          bonC.value  = +(det.bon||0);
+          regC.value  = parseFloat(det.reg_hrs) || 0;
+          otC.value   = parseFloat(det.ot_hrs) || 0;
+          statC.value = parseFloat(det.stat_pay||det.stat||0) || 0;
+          bonC.value  = parseFloat(det.bon||det.bonus||0) || 0;
         } else {
           regC.value = 0; otC.value = 0; statC.value = 0; bonC.value = 0;
         }
@@ -2932,7 +2932,6 @@ function PaystubsPage({ company }) {
           {width:13},{width:12},{width:13},{width:10},{width:12},{width:13},
         ];
         for (let rr=1; rr<=30; rr++) ws.getRow(rr).height = 14;
-        ws.protect('', { selectLockedCells: true, selectUnlockedCells: true });
 
         const G2 = (colName) => `${DR}${L(col[colName])}${dataR}`;
 
