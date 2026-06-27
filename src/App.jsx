@@ -1239,6 +1239,16 @@ useEffect(() => {
       for (let i = from; i < flat.length; i++) if (re.test(flat[i])) last = i;
       return last;
     };
+    const findSeqIdx = (seq) => {
+      for (let i = 0; i <= flat.length - seq.length; i++) {
+        let match = true;
+        for (let j = 0; j < seq.length; j++) {
+          if (!new RegExp(`^${seq[j]}$`, "i").test(flat[i + j])) { match = false; break; }
+        }
+        if (match) return i + seq.length - 1;
+      }
+      return -1;
+    };
     const numbersAfter = (idx, max) => {
       const out = [];
       for (let i = idx + 1; i < flat.length && out.length < max; i++) {
@@ -1273,7 +1283,7 @@ useEffect(() => {
     }
 
     // YEAR TO DATE summary row (gross, deductions, net)
-    const ytdLabelIdx = findIdx(/^date$/i);
+    const ytdLabelIdx = findSeqIdx(["year", "to", "date"]);
     const ytdSummary = ytdLabelIdx > -1 ? numbersAfter(ytdLabelIdx, 3) : [];
     const ytdGross = ytdSummary[0];
 
