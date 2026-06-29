@@ -1062,14 +1062,15 @@ function CompaniesPage({ companies, setCompanies, setSelectedCompany, setPage })
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editCompany, setEditCompany] = useState(null);
-  const [form, setForm] = useState({ name: "", opName: "", bn: "", province: "ON", freq: "Semi-monthly", email: "", phone: "", address: "" });
+  const [form, setForm] = useState({ name: "", opName: "", bn: "", province: "ON", freq: "Semi-monthly", email: "", phone: "", address: "", cityPostal: "" });
   const filtered = companies.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
 
   const addCompany = async () => {
     if (editCompany) {
       const { data } = await supabase.from('companies').update({
         name: form.name, bn: form.bn, province: form.province,
-        email: form.email, phone: form.phone, payroll_freq: form.freq, address: form.address
+        email: form.email, phone: form.phone, payroll_freq: form.freq,
+        address: [form.address, form.cityPostal].filter(Boolean).join(', ')
       }).eq('id', editCompany.id).select().single();
       if (data) setCompanies(prev => prev.map(c => c.id === data.id ? data : c));
       setEditCompany(null);
@@ -1078,7 +1079,8 @@ function CompaniesPage({ companies, setCompanies, setSelectedCompany, setPage })
         name: form.name || "New Company", bn: form.bn || "000000000RP0001",
         province: form.province, employees: 0, next_payroll: "2025-06-30",
         status: "active", remittance: "current", industry: "Other",
-        email: form.email, phone: form.phone, payroll_freq: form.freq, address: form.address
+        email: form.email, phone: form.phone, payroll_freq: form.freq,
+        address: [form.address, form.cityPostal].filter(Boolean).join(', ')
       }]).select().single();
       if (data) setCompanies(prev => [...prev, data]);
     }
@@ -1135,7 +1137,7 @@ function CompaniesPage({ companies, setCompanies, setSelectedCompany, setPage })
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-1">
                       <button onClick={() => { setSelectedCompany(c); setPage("dashboard"); }} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors" title="Open dashboard"><Eye size={14} /></button>
-                      <button onClick={() => { setEditCompany(c); setForm({ name: c.name, bn: c.bn||"", province: c.province||"ON", freq: c.payroll_freq||"Semi-monthly", email: c.email||"", phone: c.phone||"", address: c.address||"" }); setShowModal(true); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors" title="Edit"><Pencil size={14} /></button>
+                      <button onClick={() => { setEditCompany(c); const addrParts = (c.address||"").split(', '); setForm({ name: c.name, bn: c.bn||"", province: c.province||"ON", freq: c.payroll_freq||"Semi-monthly", email: c.email||"", phone: c.phone||"", address: addrParts[0]||"", cityPostal: addrParts.slice(1).join(', ')||"" }); setShowModal(true); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors" title="Edit"><Pencil size={14} /></button>
                       <button onClick={() => deleteCompany(c)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 transition-colors" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
@@ -1160,7 +1162,7 @@ function CompaniesPage({ companies, setCompanies, setSelectedCompany, setPage })
           <Input label="Company Email" type="email" value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))} placeholder="payroll@company.ca" />
           <Input label="Company Phone" value={form.phone} onChange={e=>setForm(p=>({...p,phone:e.target.value}))} placeholder="(416) 555-0100" />
           <Input label="Street Address" value={form.address} onChange={e=>setForm(p=>({...p,address:e.target.value}))} placeholder="100 King St W, Suite 1" />
-          <Input label="City / Postal Code" placeholder="Toronto, ON M5X 1A9" />
+          <Input label="City / Postal Code" value={form.cityPostal} onChange={e=>setForm(p=>({...p,cityPostal:e.target.value}))} placeholder="Toronto, ON M5X 1A9" />
           <Select label="Remittance Frequency">
             <option>Regular (Monthly)</option><option>Quarterly</option><option>Accelerated</option>
           </Select>
