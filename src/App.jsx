@@ -363,22 +363,22 @@ function calcPayroll(
     annualProvTax += calcONSurtax(annualProvTax);
   }
 
-  // Ontario Health Premium 2026 — IS withheld via payroll per T4032
+  // Ontario Health Premium 2026 — tracked separately, NOT part of the periodic
+  // "provincial tax deduction" figure (CRA's payroll formula/calculator excludes it here).
+  let annualOHP = 0;
   if (province === "ON") {
-    let ohp = 0;
     const ai = annualGross;
-    if      (ai <= 20000)  ohp = 0;
-    else if (ai <= 25000)  ohp = Math.min(300, 0.06 * (ai - 20000));
-    else if (ai <= 36000)  ohp = 300;
-    else if (ai <= 38500)  ohp = Math.min(450, 300 + 0.06 * (ai - 36000));
-    else if (ai <= 48000)  ohp = 450;
-    else if (ai <= 48600)  ohp = Math.min(600, 450 + 0.25 * (ai - 48000));
-    else if (ai <= 72000)  ohp = 600;
-    else if (ai <= 72600)  ohp = Math.min(750, 600 + 0.25 * (ai - 72000));
-    else if (ai <= 200000) ohp = 750;
-    else if (ai <= 200600) ohp = Math.min(900, 750 + 0.25 * (ai - 200000));
-    else                   ohp = 900;
-    annualProvTax += ohp;
+    if      (ai <= 20000)  annualOHP = 0;
+    else if (ai <= 25000)  annualOHP = Math.min(300, 0.06 * (ai - 20000));
+    else if (ai <= 36000)  annualOHP = 300;
+    else if (ai <= 38500)  annualOHP = Math.min(450, 300 + 0.06 * (ai - 36000));
+    else if (ai <= 48000)  annualOHP = 450;
+    else if (ai <= 48600)  annualOHP = Math.min(600, 450 + 0.25 * (ai - 48000));
+    else if (ai <= 72000)  annualOHP = 600;
+    else if (ai <= 72600)  annualOHP = Math.min(750, 600 + 0.25 * (ai - 72000));
+    else if (ai <= 200000) annualOHP = 750;
+    else if (ai <= 200600) annualOHP = Math.min(900, 750 + 0.25 * (ai - 200000));
+    else                   annualOHP = 900;
   }
 
   // Ontario tax reduction 2026 — only applies if annual income under ~$21,000
