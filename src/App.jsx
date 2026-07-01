@@ -354,7 +354,7 @@ function calcPayroll(
   const provBPA        = td1Prov ?? provData.bpa;
   const provLowestRate = provData.brackets[0]?.rate || 0.0505;
   // T4127 Step 5: KP = (provBPA + CPP + CPP2 + EI) × lowest prov rate
-  const provCredits = (provBPA + annualEI) * provLowestRate;
+  const provCredits = (provBPA + annualCPPBase + annualEI) * provLowestRate;
 
   let annualProvTax = Math.max(calcBracketTax(annualTaxable, provData.brackets) - provCredits, 0);
 
