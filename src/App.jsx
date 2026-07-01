@@ -241,7 +241,8 @@ function calcPayroll(
   td1Prov   = null,    // employee's provincial TD1 (null = use province BPA)
   ytdCppSoFar  = 0,    // CPP withheld YTD before this run
   ytdCpp2SoFar = 0,    // CPP2 withheld YTD before this run
-  ytdEiSoFar   = 0      // EI withheld YTD before this run
+  ytdEiSoFar   = 0,     // EI withheld YTD before this run
+  provTaxAdjustment = 0 // manual per-employee $ adjustment to provincial tax (default 0, no effect)
 ) {
   const PP       = PAY_PERIODS[payFreq] || 24;
   const province = emp.province || "ON";
@@ -388,7 +389,7 @@ function calcPayroll(
   }
 
   const annualProvTaxRounded = annualProvTax;
-  const periodProvTax = +Math.round(annualProvTaxRounded / PP * 100) / 100;
+  const periodProvTax = +Math.round(annualProvTaxRounded / PP * 100) / 100 + (+provTaxAdjustment || 0);
 
   // ── Step 6: Net Pay ──────────────────────────────────────────────────────────
   const totalTax = +(periodFedTax + periodProvTax).toFixed(2);
@@ -1195,7 +1196,7 @@ useEffect(() => {
   };
   fetchEmployees();
 }, [company.id]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "", ytd_base_earnings: "", ytd_tax: "", ytd_unlock: false, ytd_as_of_period: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "", ytd_base_earnings: "", ytd_tax: "", ytd_unlock: false, ytd_as_of_period: "", prov_tax_adjustment: "" });
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
   const [bulkImporting, setBulkImporting] = useState(false);
@@ -1445,6 +1446,7 @@ useEffect(() => {
         td1_prov: form.td1Prov ? parseFloat(form.td1Prov) : null,
         vac_rate: (form.vacRate || "4") + "%",
         payroll_schedule: form.paySchedule || "Semi-monthly",
+        prov_tax_adjustment: parseFloat(form.prov_tax_adjustment) || 0,
       };
       // Opening YTD balances are only editable via the unlock checkbox; they are never auto-updated by payroll runs
       const hasExistingYTD = (editEmployee.opening_ytd_gross || 0) > 0;
@@ -1498,6 +1500,7 @@ useEffect(() => {
           opening_ytd_er_cpp: parseFloat(form.ytd_er_cpp) || 0,
           opening_ytd_er_ei: parseFloat(form.ytd_er_ei) || 0,
           opening_ytd_base_earnings: parseFloat(form.ytd_base_earnings) || 0,
+          prov_tax_adjustment: parseFloat(form.prov_tax_adjustment) || 0,
           ytd_gross: 0,
           ytd_cpp: 0,
           ytd_ei: 0,
@@ -1618,7 +1621,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.opening_ytd_gross||""), ytd_cpp: String(e.opening_ytd_cpp||""), ytd_ei: String(e.opening_ytd_ei||""), ytd_fed_tax: String(e.opening_ytd_fed_tax||""), ytd_prov_tax: String(e.opening_ytd_prov_tax||""), ytd_vac: String(e.opening_ytd_vac||""), ytd_er_cpp: String(e.opening_ytd_er_cpp||""), ytd_er_ei: String(e.opening_ytd_er_ei||""), ytd_base_earnings: String(e.opening_ytd_base_earnings||""), ytd_tax: String(((e.opening_ytd_fed_tax||0)+(e.opening_ytd_prov_tax||0)).toFixed(2)), ytd_unlock: false, ytd_as_of_period: e.ytd_as_of_period||"" }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.opening_ytd_gross||""), ytd_cpp: String(e.opening_ytd_cpp||""), ytd_ei: String(e.opening_ytd_ei||""), ytd_fed_tax: String(e.opening_ytd_fed_tax||""), ytd_prov_tax: String(e.opening_ytd_prov_tax||""), ytd_vac: String(e.opening_ytd_vac||""), ytd_er_cpp: String(e.opening_ytd_er_cpp||""), ytd_er_ei: String(e.opening_ytd_er_ei||""), ytd_base_earnings: String(e.opening_ytd_base_earnings||""), ytd_tax: String(((e.opening_ytd_fed_tax||0)+(e.opening_ytd_prov_tax||0)).toFixed(2)), ytd_unlock: false, ytd_as_of_period: e.ytd_as_of_period||"", prov_tax_adjustment: String(e.prov_tax_adjustment||"") }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -1658,6 +1661,7 @@ useEffect(() => {
           <Input label="Vacation Pay %" type="number" value={form.vacRate} onChange={e=>setForm(p=>({...p,vacRate:e.target.value}))} placeholder="4" />
           <Input label="Federal TD1 Claim ($)" type="number" value={form.td1Fed} onChange={e=>setForm(p=>({...p,td1Fed:e.target.value}))} placeholder="16452" />
 <Input label="Provincial TD1 Claim ($)" type="number" value={form.td1Prov} onChange={e=>setForm(p=>({...p,td1Prov:e.target.value}))} placeholder="12989" />
+          <Input label="Provincial Tax Adjustment ($, optional)" type="number" value={form.prov_tax_adjustment||""} onChange={e=>setForm(p=>({...p,prov_tax_adjustment:e.target.value}))} placeholder="0 (leave blank unless correcting a known mismatch)" />
           <Input label="Position / Job Title" placeholder="Software Developer" />
         </div>
         <div className="border border-dashed border-blue-200 bg-blue-50 rounded-xl p-4 mt-2">
@@ -2014,7 +2018,7 @@ function RunPayrollPage({ company, setPage }) {
     const provTD1 = e.td1_prov || null;
     const empFreq = e.payroll_schedule || selectedFreq;
     const ytd = ytdSoFar[e.id] || { cpp: 0, cpp2: 0, ei: 0 };
-    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, h.statMode || "amount", VAC_RATES[h.vacRate] ?? 0.04, empFreq, fedTD1, provTD1, ytd.cpp, ytd.cpp2, ytd.ei), ...h };
+    return { ...e, ...calcPayroll(e, h.reg, h.ot, h.bonus, h.stat, h.statMode || "amount", VAC_RATES[h.vacRate] ?? 0.04, empFreq, fedTD1, provTD1, ytd.cpp, ytd.cpp2, ytd.ei, +(e.prov_tax_adjustment || 0)), ...h };
   });
 
   const totals = rows.reduce((a, r) => ({
