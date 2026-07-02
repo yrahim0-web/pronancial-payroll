@@ -2419,10 +2419,19 @@ function PaystubsPage({ company }) {
 
       // ── Data ──
       const empName   = (selectedEmp.name||'').toUpperCase();
-      const rawSinDigits = (selectedEmp.sin || '').replace(/\D/g, '');
-      const sinMasked = rawSinDigits.length === 9
-        ? rawSinDigits[0] + '*'.repeat(7) + rawSinDigits[8]
-        : '';
+      const rawSin = (selectedEmp.sin || '').trim();
+      let sinMasked = '';
+      if (rawSin && rawSin !== '***-***-000') {
+        if (rawSin.includes('*')) {
+          // Already partially/fully masked as typed (e.g. "9*****246") — use as-is.
+          sinMasked = rawSin;
+        } else {
+          const digitsOnly = rawSin.replace(/\D/g, '');
+          if (digitsOnly.length === 9) {
+            sinMasked = digitsOnly[0] + '*'.repeat(7) + digitsOnly[8];
+          }
+        }
+      }
       const periodStart = (selectedRun.period||'').split('–')[0]?.replace(/.*: /,'').trim() || '';
       const periodEnd   = (selectedRun.period||'').split('–')[1]?.trim() || '';
       const payDay      = selectedRun.pay_date || '';
