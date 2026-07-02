@@ -364,6 +364,22 @@ function calcPayroll(
     annualProvTax += calcONSurtax(annualProvTax);
   }
 
+  // Ontario LIFT credit (Low-income Individuals and Families Tax Credit)
+  // Applied BEFORE the Ontario Health Premium — OHP is never reduced by
+  // non-refundable credits. Verify $875 / $32,500 against the current T4127.
+  if (province === "ON") {
+    const liftMax       = Math.min(875, annualGross * 0.0505);
+    const liftReduction = 0.05 * Math.max(0, annualTaxable - 32500);
+    const lift           = Math.max(0, liftMax - liftReduction);
+    annualProvTax = Math.max(0, annualProvTax - lift);
+  }
+
+  // Ontario tax reduction 2026 — only applies if annual income under ~$21,000
+  if (province === "ON" && annualTaxable < 21000) {
+    const onTaxReduction = Math.max(0, Math.min(274, 274 - 0.05 * Math.max(0, annualTaxable - 16291)));
+    annualProvTax = Math.max(0, annualProvTax - onTaxReduction);
+  }
+
   // Ontario Health Premium 2026 — IS withheld via payroll per T4032
   if (province === "ON") {
     let ohp = 0;
@@ -382,13 +398,7 @@ function calcPayroll(
     annualProvTax += ohp;
   }
 
-  // Ontario tax reduction 2026 — only applies if annual income under ~$21,000
-  if (province === "ON" && annualTaxable < 21000) {
-    const onTaxReduction = Math.max(0, Math.min(274, 274 - 0.05 * Math.max(0, annualTaxable - 16291)));
-    annualProvTax = Math.max(0, annualProvTax - onTaxReduction);
-  }
-
-  const annualProvTaxRounded = annualProvTax;
+    const annualProvTaxRounded = annualProvTax;
   const periodProvTax = +Math.round(annualProvTaxRounded / PP * 100) / 100 + (+provTaxAdjustment || 0);
 
   // ── Step 6: Net Pay ──────────────────────────────────────────────────────────
