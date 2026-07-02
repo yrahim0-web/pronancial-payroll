@@ -2641,7 +2641,8 @@ function PaystubsPage({ company }) {
       pdf.setDrawColor(...LIGHT_GRAY);
       pdf.rect(LEFT, y, 262, ROW_H, 'S');
       pdf.setFontSize(7); pdf.setFont('helvetica','normal'); pdf.setTextColor(...BLACK);
-      pdf.text('Employer: ' + (company.bn||'') + ' ' + (company.name||'') + ' - ' + (company.address||''), LEFT + 2, y + ROW_H*0.65);
+      const bnClean = (company.bn && company.bn !== "000000000RP0001") ? company.bn + ' ' : '';
+      pdf.text('Employer: ' + bnClean + (company.name||'') + ' - ' + (company.address||''), LEFT + 2, y + ROW_H*0.65);
 
       pdf.save('paystub-'+(selectedEmp.name||'emp').replace(/ /g,'-')+'-'+(selectedRun.pay_date||'')+'.pdf');
     } catch(err) { console.error('PDF error:',err); alert('PDF failed: '+err.message); }
