@@ -1272,6 +1272,11 @@ useEffect(() => {
     const empWordIdx = findIdx(/^employee$/i);
     const fullNameFromPdf = empWordIdx > 0 ? flat.slice(0, empWordIdx).join(" ").trim() : "";
 
+    // SIN appears as a single token right after the "SIN" label (e.g. "9*****246"),
+    // already masked on most paystub exports — captured exactly as printed.
+    const sinIdx = findIdx(/^sin$/i);
+    const sinValue = sinIdx > -1 ? (flat[sinIdx + 1] || "").trim() : "";
+
     const fedIdx = findIdx(/^fed\.?tax$/i);
     const cppIdx = findIdx(/^cpp$/i);
     const eiIdx  = findIdx(/^ei$/i);
@@ -1299,6 +1304,7 @@ useEffect(() => {
 
     return {
       fullName: fullNameFromPdf || "",
+      sin: sinValue,
       salary: rate && rate > 1000 ? String(rate) : "",
       rate: rate && rate <= 200 ? String(rate) : "",
       ytd_base_earnings: ytdBase ? String(ytdBase) : "",
@@ -1379,7 +1385,7 @@ useEffect(() => {
             type: bulkPayType,
             rate: extractedRate,
             status: "active",
-            sin: "***-***-000",
+            sin: data.sin || "***-***-000",
             td1_fed: 16452,
             payroll_schedule: bulkFreq,
             vac_rate: (data.vac_rate_pct || bulkVacRate) + "%",
