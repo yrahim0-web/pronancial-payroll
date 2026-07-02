@@ -1203,7 +1203,7 @@ useEffect(() => {
   };
   fetchEmployees();
 }, [company.id]);
-  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "", ytd_base_earnings: "", ytd_tax: "", ytd_unlock: false, ytd_as_of_period: "", prov_tax_adjustment: "" });
+  const [form, setForm] = useState({ firstName: "", lastName: "", email: "", sin: "", province: "ON", type: "Salary", salary: "", rate: "", hireDate: "", position: "", td1Fed: "16452", td1Prov: "", paySchedule: "Semi-monthly", vacRate: "4", ytd_gross: "", ytd_cpp: "", ytd_ei: "", ytd_fed_tax: "", ytd_prov_tax: "", ytd_vac: "", ytd_er_cpp: "", ytd_er_ei: "", ytd_base_earnings: "", ytd_tax: "", ytd_unlock: false, ytd_as_of_period: "", prov_tax_adjustment: "" });
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
   const [bulkImporting, setBulkImporting] = useState(false);
@@ -1454,6 +1454,7 @@ useEffect(() => {
         vac_rate: (form.vacRate || "4") + "%",
         payroll_schedule: form.paySchedule || "Semi-monthly",
         prov_tax_adjustment: parseFloat(form.prov_tax_adjustment) || 0,
+        sin: form.sin || "***-***-000",
       };
       // Opening YTD balances are only editable via the unlock checkbox; they are never auto-updated by payroll runs
       const hasExistingYTD = (editEmployee.opening_ytd_gross || 0) > 0;
@@ -1491,7 +1492,7 @@ useEffect(() => {
           rate: form.type === "Salary" ? parseFloat(form.salary)||60000 : parseFloat(form.rate)||20,
           status: "active",
           last_payroll: null,
-          sin: "***-***-000",
+          sin: form.sin || "***-***-000",
           td1_fed: parseFloat(form.td1Fed) || 16452,
           td1_prov: parseFloat(form.td1Prov) || null,
           email: form.email || null,
@@ -1628,7 +1629,7 @@ useEffect(() => {
                     <td className="px-5 py-4 text-sm text-gray-500">{e.lastPayroll}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.opening_ytd_gross||""), ytd_cpp: String(e.opening_ytd_cpp||""), ytd_ei: String(e.opening_ytd_ei||""), ytd_fed_tax: String(e.opening_ytd_fed_tax||""), ytd_prov_tax: String(e.opening_ytd_prov_tax||""), ytd_vac: String(e.opening_ytd_vac||""), ytd_er_cpp: String(e.opening_ytd_er_cpp||""), ytd_er_ei: String(e.opening_ytd_er_ei||""), ytd_base_earnings: String(e.opening_ytd_base_earnings||""), ytd_tax: String(((e.opening_ytd_fed_tax||0)+(e.opening_ytd_prov_tax||0)).toFixed(2)), ytd_unlock: false, ytd_as_of_period: e.ytd_as_of_period||"", prov_tax_adjustment: String(e.prov_tax_adjustment||"") }); setShowModal(true); }}><Pencil size={14} /></button>
+                        <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" onClick={() => { setEditEmployee(e); setForm({ firstName: e.name.split(" ")[0], lastName: e.name.split(" ").slice(1).join(" "), email: e.email||"", sin: (e.sin && e.sin !== "***-***-000") ? e.sin : "", province: e.province||"ON", type: e.type||"Salary", salary: e.type==="Salary"?String(e.rate):"", rate: e.type==="Hourly"?String(e.rate):"", hireDate: e.hire_date||"", position: e.position||"", td1Fed: String(e.td1_fed||16452), td1Prov: String(e.td1_prov||""), paySchedule: e.payroll_schedule||"Semi-monthly", vacRate: (e.vac_rate||"4%").replace("%",""), ytd_gross: String(e.opening_ytd_gross||""), ytd_cpp: String(e.opening_ytd_cpp||""), ytd_ei: String(e.opening_ytd_ei||""), ytd_fed_tax: String(e.opening_ytd_fed_tax||""), ytd_prov_tax: String(e.opening_ytd_prov_tax||""), ytd_vac: String(e.opening_ytd_vac||""), ytd_er_cpp: String(e.opening_ytd_er_cpp||""), ytd_er_ei: String(e.opening_ytd_er_ei||""), ytd_base_earnings: String(e.opening_ytd_base_earnings||""), ytd_tax: String(((e.opening_ytd_fed_tax||0)+(e.opening_ytd_prov_tax||0)).toFixed(2)), ytd_unlock: false, ytd_as_of_period: e.ytd_as_of_period||"", prov_tax_adjustment: String(e.prov_tax_adjustment||"") }); setShowModal(true); }}><Pencil size={14} /></button>
                         <button onClick={async () => {
   const { error } = await supabase
     .from('employees')
@@ -1650,7 +1651,7 @@ useEffect(() => {
           <Input label="First Name" value={form.firstName} onChange={e=>setForm(p=>({...p,firstName:e.target.value}))} placeholder="Jane" />
           <Input label="Last Name" value={form.lastName} onChange={e=>setForm(p=>({...p,lastName:e.target.value}))} placeholder="Smith" />
           <Input label="Email Address" type="email" placeholder="jane@company.ca" />
-          <Input label="SIN (Social Insurance Number)" placeholder="000-000-000" />
+          <Input label="SIN (Social Insurance Number)" value={form.sin} onChange={e=>setForm(p=>({...p,sin:e.target.value}))} placeholder="000-000-000" />
           <Select label="Province of Employment" value={form.province} onChange={e=>setForm(p=>({...p,province:e.target.value}))}>
             {["ON","BC","AB","QC","MB","SK","NS","NB","NL","PE"].map(p=><option key={p}>{p}</option>)}
           </Select>
