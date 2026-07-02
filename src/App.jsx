@@ -364,26 +364,23 @@ function calcPayroll(
     annualProvTax += calcONSurtax(annualProvTax);
   }
 
-  // Ontario LIFT credit (Low-income Individuals and Families Tax Credit)
-  // Applied BEFORE the Ontario Health Premium — OHP is never reduced by
-  // non-refundable credits. Verify $875 / $32,500 against the current T4127.
-  if (province === "ON") {
-    const liftMax       = Math.min(875, annualGross * 0.0505);
-    const liftReduction = 0.05 * Math.max(0, annualTaxable - 32500);
-    const lift           = Math.max(0, liftMax - liftReduction);
-    annualProvTax = Math.max(0, annualProvTax - lift);
-  }
-
-  // Ontario tax reduction 2026 — only applies if annual income under ~$21,000
-  if (province === "ON" && annualTaxable < 21000) {
+  // Ontario tax reduction (S) — exact T4127 formula, scoped to Monthly only.
+  // Bi-weekly/Weekly/Semi-monthly keep the original $274/$16,291 formula.
+  if (province === "ON" && payFreq === "Monthly") {
+    const S2 = 300;
+    const Y  = 0;
+    const t4PlusV1 = annualProvTax;
+    const onTaxReduction = Math.max(0, Math.min(t4PlusV1, (2 * (S2 + Y)) - t4PlusV1));
+    annualProvTax = Math.max(0, annualProvTax - onTaxReduction);
+  } else if (province === "ON" && annualTaxable < 21000) {
     const onTaxReduction = Math.max(0, Math.min(274, 274 - 0.05 * Math.max(0, annualTaxable - 16291)));
     annualProvTax = Math.max(0, annualProvTax - onTaxReduction);
   }
 
-  // Ontario Health Premium 2026 — IS withheld via payroll per T4032
+  // Ontario Health Premium (V2) — uses taxable income for Monthly, gross for others.
   if (province === "ON") {
     let ohp = 0;
-    const ai = annualGross;
+    const ai = payFreq === "Monthly" ? annualTaxable : annualGross;
     if      (ai <= 20000)  ohp = 0;
     else if (ai <= 25000)  ohp = Math.min(300, 0.06 * (ai - 20000));
     else if (ai <= 36000)  ohp = 300;
