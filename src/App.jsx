@@ -2412,7 +2412,10 @@ function PaystubsPage({ company }) {
 
       // ── Data ──
       const empName   = (selectedEmp.name||'').toUpperCase();
-      const sinMasked = '9' + '*'.repeat(7) + '2';
+      const rawSinDigits = (selectedEmp.sin || '').replace(/\D/g, '');
+      const sinMasked = rawSinDigits.length === 9
+        ? rawSinDigits[0] + '*'.repeat(7) + rawSinDigits[8]
+        : '';
       const periodStart = (selectedRun.period||'').split('–')[0]?.replace(/.*: /,'').trim() || '';
       const periodEnd   = (selectedRun.period||'').split('–')[1]?.trim() || '';
       const payDay      = selectedRun.pay_date || '';
