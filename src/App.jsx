@@ -372,7 +372,7 @@ function calcPayroll(
     const t4PlusV1 = annualProvTax;
     const onTaxReduction = Math.max(0, Math.min(t4PlusV1, (2 * (S2 + Y)) - t4PlusV1));
     annualProvTax = Math.max(0, annualProvTax - onTaxReduction);
-  } else if (province === "ON" && annualTaxable < 21000) {
+  } else if (province === "ON") {
     const onTaxReduction = Math.max(0, Math.min(274, 274 - 0.05 * Math.max(0, annualTaxable - 16291)));
     annualProvTax = Math.max(0, annualProvTax - onTaxReduction);
   }
@@ -380,7 +380,7 @@ function calcPayroll(
   // Ontario Health Premium (V2) — uses taxable income for Monthly, gross for others.
   if (province === "ON") {
     let ohp = 0;
-    const ai = payFreq === "Monthly" ? annualTaxable : annualGross;
+    const ai = annualTaxable;
     if      (ai <= 20000)  ohp = 0;
     else if (ai <= 25000)  ohp = Math.min(300, 0.06 * (ai - 20000));
     else if (ai <= 36000)  ohp = 300;
